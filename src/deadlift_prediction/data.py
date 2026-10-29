@@ -154,19 +154,23 @@ def _to_float(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce").astype("float64")
 
 
-def _row_ids(df: pd.DataFrame, cols: list[str]) -> pd.Series:
-    joined = df[cols].astype("string").fillna("").agg("|".join, axis=1)
-    return joined.map(lambda t: short_hash(t, 16))
+def _hash_unique(values: pd.Series, prefix: str, n: int = 16) -> pd.Series:
+    """sha256-based hash of each value, computed once per distinct value."""
+    codes, uniques = pd.factorize(values.astype("string"))
+    hashed = np.array([short_hash(prefix + str(u), n) for u in uniques], dtype=object)
+    return pd.Series(hashed[codes], index=values.index)
 
 
 def lifter_key(names: pd.Series) -> pd.Series:
     """Pseudonymous canonical identity: hash of the full OPL Name including any `#n` suffix."""
-    return names.map(lambda n: short_hash("lifter|" + n, 16))
+    return _hash_unique(names, "lifter|")
 
 
 def hash_unit(keys: pd.Series, salt: str) -> np.ndarray:
     """Deterministic uniform [0,1) value per key (used for lifter sampling and group splits)."""
-    return keys.map(lambda k: int(hashlib.sha256(f"{salt}|{k}".encode()).hexdigest()[:13], 16) / 16**13).to_numpy()
+    codes, uniques = pd.factorize(pd.Series(keys).astype("string"))
+    u = np.array([int(hashlib.sha256(f"{salt}|{k}".encode()).hexdigest()[:13], 16) / 16**13 for k in uniques])
+    return u[codes]
 
 
 def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]:
@@ -190,6 +194,16 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
     df = df[df["Event"] == "SBD"]
     step("event_is_SBD", n, len(df))
 
+    # One string per raw row (all raw columns), used for exact-duplicate detection
+    # and stable row IDs. Unused raw columns are dropped right after to save memory.
+    rowstr = df[raw_cols[0]].astype("string").fillna("")
+    for c in raw_cols[1:]:
+        rowstr = rowstr + "|" + df[c].astype("string").fillna("")
+    keep_cols = ["Name", "Sex", "Equipment", "Age", "BodyweightKg", *LIFTS, "Federation", "ParentFederation", "Tested",
+                 "MeetCountry", "MeetName", "Division", "Date"]
+    df = df[keep_cols].assign(_rowstr=rowstr.to_numpy())
+    del rowstr
+
     for lift in LIFTS:
         df[lift] = _to_float(df[lift])
     for lift in LIFTS:
@@ -208,7 +222,7 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
     step("has_name", n, len(df))
 
     n = len(df)
-    dup = df.duplicated(subset=raw_cols, keep="first")
+    dup = df.duplicated(subset=["_rowstr"], keep="first")
     df = df[~dup]
     step("exact_duplicate_rows", n, len(df), "identical across every raw column")
 
@@ -216,8 +230,8 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
     # equipment, identical three lifts. OPL lists lifters once per division they
     # entered, and cross-sanctioned meets can appear under several federations.
     # These are one performance; keep one deterministic representative.
-    df["meet_key"] = (df["Federation"].fillna("") + "|" + df["Date"].dt.strftime("%Y-%m-%d") + "|"
-                      + df["MeetCountry"].fillna("") + "|" + df["MeetName"].fillna("")).map(short_hash)
+    df["meet_key"] = _hash_unique(df["Federation"].fillna("") + "|" + df["Date"].dt.strftime("%Y-%m-%d") + "|"
+                                  + df["MeetCountry"].fillna("") + "|" + df["MeetName"].fillna(""), "")
     df["_n_missing_demo"] = df[["Age", "BodyweightKg"]].isna().sum(axis=1)
     df = df.sort_values(["_n_missing_demo", "Federation", "MeetName", "Division"], na_position="last", kind="mergesort")
     listing_key = ["Name", "Date", "Equipment", *LIFTS]
@@ -255,7 +269,8 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
         "invalid_equipment": int(bad_eq.sum()),
     }
 
-    df["row_id"] = _row_ids(df, raw_cols)
+    df["row_id"] = _hash_unique(df["_rowstr"], "")
+    df = df.drop(columns="_rowstr")
     if df["row_id"].duplicated().any():
         raise ValueError("row_id collision; increase hash length")
     df["lifter_key"] = lifter_key(df["Name"])

@@ -57,6 +57,6 @@ pytest -q
 
 - [x] Package, configs, CLI, synthetic smoke pipeline, tests
 - [x] Snapshot registered: `openpowerlifting-2026-10-24-0fc10dd9.zip`, 4,054,260 data rows
-- [ ] Subset (10% lifters) prepare + baselines
+- [x] Subset (10% lifters): prepare + all 65 runs trained; validation-only tables in `reports/subset10/`
 - [ ] Full-snapshot experiments (ablation, history, chronological, transfer)
 - [ ] Final report
