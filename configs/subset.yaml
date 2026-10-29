@@ -1,0 +1,10 @@
+# Working subset: 10% of lifters (sampled by hashed identity before splitting).
+base: default.yaml
+name: subset10
+data:
+  lifter_fraction: 0.10
+models:
+  mlp:
+    seeds: [42]
+evaluation:
+  bootstrap_reps: 100

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deadlift-prediction"
+version = "0.1.0"
+description = "CSC 5887: predicting competition deadlift from squat, bench, and lifter characteristics (OpenPowerlifting)."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=15",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.6",
+    "torch>=2.2",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+deadlift = "deadlift_prediction.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

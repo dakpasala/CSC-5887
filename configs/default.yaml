@@ -1,0 +1,66 @@
+# Full-snapshot experiment configuration.
+# All choices here were fixed before any test-partition metrics were computed.
+name: full
+seed: 42
+
+data:
+  source_url: https://openpowerlifting.gitlab.io/opl-csv/files/openpowerlifting-latest.zip
+  raw_dir: data/raw
+  processed_dir: data/processed
+  # Fraction of lifters kept (sampled by hashed lifter identity, never by row). 1.0 = all.
+  lifter_fraction: 1.0
+  # Plausibility ranges; values outside are set to missing (rows are kept).
+  age_range: [5, 100]
+  bodyweight_range: [20, 300]
+
+artifacts_dir: artifacts
+reports_dir: reports
+
+splits:
+  group: {train: 0.70, val: 0.15, test: 0.15}
+  # Chronological boundaries are chosen from row-date quantiles (coverage only),
+  # snapped to the first day of the month.
+  chrono_quantiles: {val_start: 0.70, test_start: 0.85}
+
+transfer:
+  # Selection rules fixed in advance, using cleaned row counts only.
+  equipment:
+    min_rows: 20000
+    exclude_largest: true  # holding out the majority category leaves an unrepresentative train set
+  federation:
+    top_k: 3
+
+features:
+  # Bodyweight bins (kg) for subgroup analysis, fixed before evaluation.
+  bodyweight_bins: [0, 60, 75, 90, 105, 120, 1000]
+  federation_min_count: 500  # federations rarer than this (in train) map to the unknown code
+
+models:
+  ratio: {}
+  linear:
+    alphas: [0.0, 1.0, 10.0, 100.0]
+  lightgbm:
+    objective: regression          # L2; early stopping monitors validation L1
+    learning_rate: 0.1
+    n_estimators: 3000
+    early_stopping_rounds: 50
+    grid:
+      - {num_leaves: 31, min_child_samples: 20}
+      - {num_leaves: 127, min_child_samples: 20}
+      - {num_leaves: 127, min_child_samples: 200}
+      - {num_leaves: 255, min_child_samples: 100}
+  mlp:
+    hidden: [128, 64]
+    dropout: 0.1
+    lr: 0.001
+    batch_size: 4096
+    max_epochs: 40
+    patience: 5
+    loss: l1                       # matches the primary metric (MAE)
+    device: auto                   # cuda if available, otherwise cpu
+    seeds: [42, 43, 44]            # repeated seeds for the final (feature set D) MLP
+
+evaluation:
+  bootstrap_reps: 200
+  sparse_rows: 100
+  sparse_lifters: 30

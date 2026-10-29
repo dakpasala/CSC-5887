@@ -1,0 +1,29 @@
+# Synthetic smoke test. Scores produced with this config are NOT research findings.
+base: default.yaml
+name: smoke
+synthetic: true
+data:
+  processed_dir: artifacts/smoke/processed
+artifacts_dir: artifacts/smoke
+reports_dir: artifacts/smoke/reports
+transfer:
+  equipment: {min_rows: 50, exclude_largest: true}
+  federation: {top_k: 2}
+features:
+  bodyweight_bins: [0, 60, 75, 90, 105, 120, 1000]
+  federation_min_count: 5
+models:
+  lightgbm:
+    n_estimators: 50
+    early_stopping_rounds: 10
+    grid:
+      - {num_leaves: 7, min_child_samples: 10}
+  mlp:
+    max_epochs: 3
+    patience: 2
+    batch_size: 256
+    seeds: [42]
+evaluation:
+  bootstrap_reps: 20
+  sparse_rows: 20
+  sparse_lifters: 5
