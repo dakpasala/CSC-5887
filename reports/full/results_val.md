@@ -273,6 +273,42 @@ Paired MAE differences (a − b; negative = a better):
 | val | transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | transfer · C-Federation-THSWPA · D_plus_equipment · lightgbm | 347919 | 110504 | -0.24 | -0.27 | -0.23 |
 | val | transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | transfer · C-Federation-THSWPA · A_squat · ratio | 347919 | 110504 | -8.22 | -8.36 | -8.10 |
 
+## capacity_D — partition `val`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ablation · A · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 390871 | 118377 | 14.10 | 14.01 | 14.18 | 14.02 | 8.25 | 0.90 |
+| capacity · A · D_plus_equipment · lightgbm · lgbm_big | lightgbm | D_plus_equipment | 390871 | 118377 | 14.10 | 14.01 | 14.18 | 14.02 | 8.24 | 0.90 |
+| ablation · A · D_plus_equipment · mlp · s42 | mlp | D_plus_equipment | 390871 | 118377 | 14.32 | 14.22 | 14.40 | 14.24 | 8.32 | 0.90 |
+| capacity · A · D_plus_equipment · mlp · mlp_wide · s42 | mlp | D_plus_equipment | 390871 | 118377 | 14.34 | 14.25 | 14.42 | 14.28 | 8.34 | 0.90 |
+| capacity · A · D_plus_equipment · mlp · mlp_deep · s42 | mlp | D_plus_equipment | 390871 | 118377 | 14.31 | 14.22 | 14.39 | 14.26 | 8.33 | 0.90 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| val | capacity · A · D_plus_equipment · lightgbm · lgbm_big | ablation · A · D_plus_equipment · lightgbm | 390871 | 118377 | -0.00 | -0.01 | 0.00 |
+| val | capacity · A · D_plus_equipment · mlp · mlp_wide · s42 | ablation · A · D_plus_equipment · mlp · s42 | 390871 | 118377 | 0.02 | 0.01 | 0.03 |
+| val | capacity · A · D_plus_equipment · mlp · mlp_deep · s42 | ablation · A · D_plus_equipment · mlp · s42 | 390871 | 118377 | -0.01 | -0.02 | 0.00 |
+
+## capacity_D_history — partition `val`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| history · A · D_plus_equipment-history · lightgbm · histrows | lightgbm | D_plus_equipment+history | 272140 | 64848 | 8.78 | 8.72 | 8.83 | 8.82 | 5.09 | 0.95 |
+| capacity · A · D_plus_equipment-history · lightgbm · histrows · lgbm_big | lightgbm | D_plus_equipment+history | 272140 | 64848 | 8.75 | 8.70 | 8.81 | 8.80 | 5.08 | 0.95 |
+| history · A · D_plus_equipment-history · mlp · histrows · s42 | mlp | D_plus_equipment+history | 272140 | 64848 | 8.77 | 8.72 | 8.83 | 8.81 | 5.10 | 0.95 |
+| capacity · A · D_plus_equipment-history · mlp · histrows · mlp_wide · s42 | mlp | D_plus_equipment+history | 272140 | 64848 | 8.74 | 8.68 | 8.79 | 8.77 | 5.09 | 0.95 |
+| capacity · A · D_plus_equipment-history · mlp · histrows · mlp_deep · s42 | mlp | D_plus_equipment+history | 272140 | 64848 | 8.74 | 8.69 | 8.80 | 8.78 | 5.07 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| val | capacity · A · D_plus_equipment-history · lightgbm · histrows · lgbm_big | history · A · D_plus_equipment-history · lightgbm · histrows | 272140 | 64848 | -0.02 | -0.03 | -0.02 |
+| val | capacity · A · D_plus_equipment-history · mlp · histrows · mlp_wide · s42 | history · A · D_plus_equipment-history · mlp · histrows · s42 | 272140 | 64848 | -0.03 | -0.04 | -0.03 |
+| val | capacity · A · D_plus_equipment-history · mlp · histrows · mlp_deep · s42 | history · A · D_plus_equipment-history · mlp · histrows · s42 | 272140 | 64848 | -0.03 | -0.04 | -0.02 |
+
 ## Subgroups (protocol A, feature set D; protocol B LightGBM)
 
 | run_id | group_by | group | rows | lifters | mae | mape | r2 | sparse |
@@ -385,6 +421,12 @@ Paired MAE differences (a − b; negative = a better):
 | ablation__A__E_plus_federation__lightgbm | ablation | A | E_plus_federation | lightgbm | 42 | 1817276 | 551698 | 390871 | 39.69 | 13.87 |
 | ablation__A__E_plus_federation__linear | ablation | A | E_plus_federation | linear | 42 | 1817276 | 551698 | 390871 | 217.67 | 14.92 |
 | ablation__A__E_plus_federation__mlp__s42 | ablation | A | E_plus_federation | mlp | 42 | 1817276 | 551698 | 390871 | 58.08 | 13.88 |
+| capacity__A__D_plus_equipment-history__lightgbm__histrows__lgbm_big | capacity | A | D_plus_equipment+history | lightgbm | 42 | 1264025 | 301327 | 272140 | 66.90 | 8.75 |
+| capacity__A__D_plus_equipment-history__mlp__histrows__mlp_deep__s42 | capacity | A | D_plus_equipment+history | mlp | 42 | 1264025 | 301327 | 272140 | 269.57 | 8.74 |
+| capacity__A__D_plus_equipment-history__mlp__histrows__mlp_wide__s42 | capacity | A | D_plus_equipment+history | mlp | 42 | 1264025 | 301327 | 272140 | 68.22 | 8.74 |
+| capacity__A__D_plus_equipment__lightgbm__lgbm_big | capacity | A | D_plus_equipment | lightgbm | 42 | 1817276 | 551698 | 390871 | 58.63 | 14.10 |
+| capacity__A__D_plus_equipment__mlp__mlp_deep__s42 | capacity | A | D_plus_equipment | mlp | 42 | 1817276 | 551698 | 390871 | 147.81 | 14.31 |
+| capacity__A__D_plus_equipment__mlp__mlp_wide__s42 | capacity | A | D_plus_equipment | mlp | 42 | 1817276 | 551698 | 390871 | 45.35 | 14.34 |
 | chrono__B__A_squat__ratio | chrono | B | A_squat | ratio | 42 | 1800694 | 575145 | 391938 | 0.37 | 21.25 |
 | chrono__B__D_plus_equipment-history__lightgbm__histrows | chrono | B | D_plus_equipment+history | lightgbm | 42 | 1223622 | 301072 | 279563 | 70.74 | 8.29 |
 | chrono__B__D_plus_equipment__last_deadlift__histrows | chrono | B | D_plus_equipment | last_deadlift | 42 | 1223622 | 301072 | 279563 | 0.25 | 12.60 |
