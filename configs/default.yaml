@@ -60,6 +60,19 @@ models:
     device: auto                   # cuda if available, otherwise cpu
     seeds: [42, 43, 44]            # repeated seeds for the final (feature set D) MLP
 
+# Capacity check (protocol A, feature sets D and D+history), added after the base
+# runs and judged on VALIDATION only, before any test scoring. Selection rule fixed
+# in advance: a larger variant replaces the base model of its family only if its
+# validation MAE is lower by >= min_gain_kg with a lifter-bootstrap paired CI
+# excluding 0. All variants are reported either way.
+capacity:
+  min_gain_kg: 0.2
+  variants:
+    mlp_wide: {model: mlp, overrides: {hidden: [256, 128]}}
+    mlp_deep: {model: mlp, overrides: {hidden: [512, 256, 128]}}
+    lgbm_big: {model: lightgbm, overrides: {learning_rate: 0.03, n_estimators: 8000,
+                                            fixed_grid: [{num_leaves: 511, min_child_samples: 50}]}}
+
 evaluation:
   bootstrap_reps: 200
   sparse_rows: 100

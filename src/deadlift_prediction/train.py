@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer
+    experiment: str          # ablation | history | chrono | transfer | capacity
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -33,6 +33,8 @@ class RunSpec:
     history_only: bool = False   # restrict train/val/eval rows to history-eligible
     tune_from: str | None = None  # reuse LightGBM params selected in this run
     tags: dict = field(default_factory=dict)
+    variant: str | None = None    # named capacity variant (appended to run_id)
+    overrides: dict = field(default_factory=dict)  # model params overriding the config
 
     @property
     def run_id(self) -> str:
@@ -40,6 +42,8 @@ class RunSpec:
         parts = [self.experiment, proto, self.feature_set.replace("+", "-"), self.model]
         if self.history_only:
             parts.append("histrows")
+        if self.variant:
+            parts.append(self.variant)
         if self.model == "mlp":
             parts.append(f"s{self.seed}")
         return "__".join(parts)
@@ -82,6 +86,12 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
             runs.append(RunSpec("transfer", proto, fs, "linear"))
             runs.append(RunSpec("transfer", proto, fs, "lightgbm", tune_from=f"ablation__A__{fs}__lightgbm"))
         runs.append(RunSpec("transfer", proto, with_field, "mlp", seed=seeds[0]))
+
+    # 5. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    for name, v in cfg.get("capacity", {}).get("variants", {}).items():
+        for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
+            runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,
+                                variant=name, overrides=v["overrides"]))
     return runs
 
 
@@ -116,6 +126,7 @@ def run_one(spec: RunSpec, df: pd.DataFrame, cfg: dict, splits_info: dict, out_r
         if src.exists():
             sel = read_json(src)["selected"]
             overrides["fixed_grid"] = [{"num_leaves": sel["num_leaves"], "min_child_samples": sel["min_child_samples"]}]
+    overrides.update(spec.overrides)
     model = build_model(spec.model, spec.feature_set, cfg, spec.seed, overrides)
     train_df, val_df = df[tr], df[va]
     y_tr, y_va = train_df[TARGET].to_numpy(float), val_df[TARGET].to_numpy(float)

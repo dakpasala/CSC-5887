@@ -103,8 +103,8 @@ class Evaluator:
         return out
 
 
-def rid(exp, proto, fs, model, seed=None, hist=False):
-    return RunSpec(exp, proto, fs, model, seed=seed or 42, history_only=hist).run_id
+def rid(exp, proto, fs, model, seed=None, hist=False, variant=None):
+    return RunSpec(exp, proto, fs, model, seed=seed or 42, history_only=hist, variant=variant).run_id
 
 
 def evaluate(cfg: dict, final: bool = False) -> dict:
@@ -184,6 +184,21 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
                                      "share_raw": (sub["Equipment"] == "Raw").mean(), "mean_squat": sub["Best3SquatKg"].mean(),
                                      "mean_bench": sub["Best3BenchKg"].mean(), "mean_bodyweight": sub["BodyweightKg"].mean(),
                                      "age_missing": sub["Age"].isna().mean(), "mean_deadlift": sub["y"].mean()})
+
+    # 5. capacity check: larger variants vs base models on identical rows
+    variants = cfg.get("capacity", {}).get("variants", {})
+    for fs, hist, base_exp, name in [("D_plus_equipment", False, "ablation", "capacity_D"),
+                                     ("D_plus_equipment+history", True, "history", "capacity_D_history")]:
+        ids, pairs = [], []
+        for m in ["lightgbm", "mlp"]:
+            base = rid(base_exp, "A", fs, m, s0, hist=hist)
+            ids.append(base)
+            for vname, v in variants.items():
+                if v["model"] == m:
+                    vid = rid("capacity", "A", fs, m, s0, hist=hist, variant=vname)
+                    ids.append(vid)
+                    pairs.append((vid, base))
+        add(E.compare(name, ids, T, row_filter=has_h if hist else None, pairs=pairs))
 
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)

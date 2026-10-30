@@ -30,7 +30,7 @@ deadlift summarize --config configs/default.yaml --final
 pytest -q
 ```
 
-`train` accepts `--experiment {ablation,history,chrono,transfer}` (repeatable) and `--only <substring>`.
+`train` accepts `--experiment {ablation,history,chrono,transfer,capacity}` (repeatable) and `--only <substring>`.
 
 ## Layout
 
