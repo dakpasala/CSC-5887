@@ -72,3 +72,27 @@ def test_mlp_roundtrip_in_isolated_process():
     here = str(pathlib.Path(__file__).parent)
     r = subprocess.run([sys.executable, "-c", MLP_CHECK, here], capture_output=True, text=True, timeout=300)
     assert "MLP_OK" in r.stdout, r.stderr[-2000:]
+
+
+def test_ensemble_weight_chosen_on_validation_only(cfg, tmp_path, monkeypatch):
+    import deadlift_prediction.ensemble as ens
+    from deadlift_prediction.config import write_json
+
+    runs = tmp_path / "runs"
+    y_val, y_test = np.array([100.0, 200.0]), np.array([100.0, 200.0])
+    # On val, LightGBM is exact; on test, the MLP is exact. A val-only choice must pick w=1.
+    for rid, val_pred, test_pred in [("L", y_val, y_test + 50), ("M", y_val + 50, y_test)]:
+        d = runs / rid
+        d.mkdir(parents=True)
+        pd.DataFrame({"row_id": ["v1", "v2", "t1", "t2"], "lifter_key": ["a", "b", "c", "d"],
+                      "partition": ["val", "val", "test", "test"], "y": np.r_[y_val, y_test],
+                      "yhat": np.r_[val_pred, test_pred]}).to_parquet(d / "predictions.parquet")
+        write_json(d / "meta.json", {"protocol": "A", "feature_set": "D_plus_equipment", "seed": 42, "history_only": False,
+                                     "split_id": "x", "train_rows": 1, "train_lifters": 1, "val_rows": 2})
+        write_json(d / "done.json", {"ok": True})
+    monkeypatch.setattr(ens, "PAIRS", [("E", "L", "M")])
+    monkeypatch.setattr(ens, "artifacts_dir", lambda c: tmp_path)
+    (meta,) = ens.build_ensembles(cfg)
+    assert meta["selected"]["w_lightgbm"] == 1.0
+    p = pd.read_parquet(runs / "E" / "predictions.parquet")
+    np.testing.assert_allclose(p.loc[p.partition == "test", "yhat"], y_test + 50)

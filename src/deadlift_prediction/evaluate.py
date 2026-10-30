@@ -211,6 +211,13 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     rb = rid("history_rich", "B", "D_plus_equipment+history_rich", "lightgbm", hist=True)
     add(E.compare("history_rich_B", [last_b, hb, rb], T, row_filter=has_h, pairs=[(rb, hb), (rb, last_b)]))
 
+    # 7. follow-up: LightGBM + MLP ensembles (weight chosen on validation), identical rows
+    from .ensemble import PAIRS
+    for run_id, lgbm_id, mlp_id in PAIRS:
+        hist = "histrows" in run_id
+        add(E.compare(f"ensemble|{run_id.split('__')[1]}|{'history_rich' if hist else 'D'}", [lgbm_id, mlp_id, run_id], T,
+                      row_filter=has_h if hist else None, pairs=[(run_id, lgbm_id), (run_id, mlp_id)]))
+
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)
     subs += E.subgroups([ch[2]], T)

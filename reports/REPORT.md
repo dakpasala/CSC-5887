@@ -148,6 +148,21 @@ tuned on validation only, and scored on test once. It adds, from strictly earlie
 - **Verdict:** the gain is consistent and real, but smaller than the 0.5–1.5 kg we expected. Most of the useful
   history is already captured by the previous meet alone.
 
+#### Follow-up: LightGBM + MLP ensemble (post-hoc)
+
+prediction = w × LightGBM + (1 − w) × MLP, with w chosen by validation MAE from {0, 0.25, 0.5, 0.75, 1} and
+test scored once.
+
+| Test rows | w (from validation) | LightGBM | MLP | Ensemble | Δ vs best single model |
+|---|---|---|---|---|---|
+| A, feature set D (386,613) | 0.75 | 14.08 | 14.30 | 14.08 | +0.001 [−0.004, 0.006] vs LightGBM |
+| A, + career history (268,289) | 0.5 | 8.41 | 8.38 | **8.32** | −0.062 [−0.070, −0.056] vs MLP |
+| B, feature set D (402,128) | 0.5 | 14.04 | 14.00 | 13.97 | −0.032 [−0.038, −0.025] vs MLP |
+
+Averaging gives no gain without history and less than 0.1 kg with it. The two model types make nearly the same
+errors, which fits the earlier conclusion that the inputs, not the model, are the limit. The best test result
+for returning lifters is the career-history ensemble, at **8.32 kg**.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -200,6 +215,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Knowing the category always helps transfer."** It did not for unseen categories (§3, RQ4).
 - **"Career-level history will cut error by another 0.5–1.5 kg."** It cut error by 0.32 kg. That's real, but the
   previous meet already carries most of the signal.
+- **"Averaging LightGBM and the MLP will gain 0.1–0.3 kg."** It gained 0–0.09 kg; the two models' errors are highly correlated.
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -261,10 +277,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 40 tests
+.venv/bin/pytest -q                                    # 41 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 3 LightGBM+MLP ensembles
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```

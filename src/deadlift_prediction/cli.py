@@ -25,6 +25,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich"])
     p.add_argument("--only", help="substring filter on run IDs")
     p.add_argument("--force", action="store_true")
+    add("ensemble", "build LightGBM+MLP ensembles from finished runs (weight chosen on validation)")
     for name in ("evaluate", "summarize"):
         p = add(name, f"{name} saved predictions")
         p.add_argument("--final", action="store_true", help="score TEST partitions (only after configs are frozen)")
@@ -44,6 +45,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "train":
         from .train import train
         train(cfg, experiments=args.experiment, force=args.force, only=args.only)
+    elif args.cmd == "ensemble":
+        from .ensemble import build_ensembles
+        build_ensembles(cfg)
     elif args.cmd == "evaluate":
         from .evaluate import evaluate
         evaluate(cfg, final=args.final)
@@ -63,11 +67,13 @@ def smoke(config: str | Path | None = None) -> dict:
     assert cfg["synthetic"], "smoke must use a synthetic config"
     summary = prepare(cfg)
     metas = train(cfg, force=True)
+    from .ensemble import build_ensembles
+    ens = build_ensembles(cfg)
     for final in (False, True):
         evaluate(cfg, final=final)
         summarize_results(cfg, final=final)
     print(f"SMOKE OK (synthetic): {len(metas)} runs")
-    return {"summary": summary, "runs": metas, "cfg": cfg}
+    return {"summary": summary, "runs": metas, "ensembles": ens, "cfg": cfg}
 
 
 if __name__ == "__main__":
