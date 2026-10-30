@@ -125,6 +125,29 @@ MLP essentially ties LightGBM. The test lifters' own earlier meets are used as i
 rows were used for fitting or preprocessing. The 118,324 test rows without history (each lifter's first meet)
 are scored separately: LightGBM gets 13.80 kg there, and no past performance is invented for them.
 
+#### Follow-up: career-summary history (post-hoc)
+
+This experiment was designed **after** the results above were reported. Its settings were fixed in advance,
+tuned on validation only, and scored on test once. It adds, from strictly earlier meets:
+
+- best previous squat, bench, and deadlift;
+- the career average of deadlift ÷ squat and of deadlift ÷ (squat + bench);
+- the deadlift from two meets ago;
+- days since the first meet;
+- whether the previous meet used the same equipment.
+
+| Same 268,289 protocol-A test rows | MAE | MAPE | R² |
+|---|---|---|---|
+| LightGBM, previous meet only | 8.73 | 5.1% | 0.954 |
+| **LightGBM, + career summaries** | **8.41 [8.37, 8.47]** | 5.0% | 0.957 |
+| **MLP, + career summaries** | **8.38 [8.34, 8.44]** | 5.0% | 0.956 |
+
+- **Gain:** paired Δ −0.32 kg [−0.34, −0.30] for LightGBM and −0.33 kg for the MLP.
+- **Typical error:** the median absolute error is 6.0 kg; 71% of predictions fall within 10 kg and 92% within 20 kg.
+- **Later meets:** on protocol B, history-eligible rows go from 8.47 to 8.17 kg (Δ −0.31 [−0.32, −0.29]).
+- **Verdict:** the gain is consistent and real, but smaller than the 0.5–1.5 kg we expected. Most of the useful
+  history is already captured by the previous meet alone.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -175,6 +198,8 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
   improved LightGBM validation MAE by only 0.2 kg (14.32 to 14.10 kg). The remaining error mostly reflects
   information these inputs do not contain.
 - **"Knowing the category always helps transfer."** It did not for unseen categories (§3, RQ4).
+- **"Career-level history will cut error by another 0.5–1.5 kg."** It cut error by 0.32 kg. That's real, but the
+  previous meet already carries most of the signal.
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -236,10 +261,10 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 38 tests
+.venv/bin/pytest -q                                    # 40 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity runs
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history runs
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```

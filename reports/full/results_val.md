@@ -309,6 +309,40 @@ Paired MAE differences (a − b; negative = a better):
 | val | capacity · A · D_plus_equipment-history · mlp · histrows · mlp_wide · s42 | history · A · D_plus_equipment-history · mlp · histrows · s42 | 272140 | 64848 | -0.03 | -0.04 | -0.03 |
 | val | capacity · A · D_plus_equipment-history · mlp · histrows · mlp_deep · s42 | history · A · D_plus_equipment-history · mlp · histrows · s42 | 272140 | 64848 | -0.03 | -0.04 | -0.02 |
 
+## history_rich_A — partition `val`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| history · A · D_plus_equipment · last_deadlift · histrows | last_deadlift | D_plus_equipment | 272140 | 64848 | 13.45 | 13.35 | 13.57 | 13.99 | 7.87 | 0.86 |
+| history · A · D_plus_equipment-history · lightgbm · histrows | lightgbm | D_plus_equipment+history | 272140 | 64848 | 8.78 | 8.72 | 8.83 | 8.82 | 5.09 | 0.95 |
+| history · A · D_plus_equipment-history · mlp · histrows · s42 | mlp | D_plus_equipment+history | 272140 | 64848 | 8.77 | 8.72 | 8.83 | 8.81 | 5.10 | 0.95 |
+| history_rich · A · D_plus_equipment-history_rich · lightgbm · histrows | lightgbm | D_plus_equipment+history_rich | 272140 | 64848 | 8.46 | 8.42 | 8.52 | 8.65 | 4.94 | 0.96 |
+| history_rich · A · D_plus_equipment-history_rich · mlp · histrows · s42 | mlp | D_plus_equipment+history_rich | 272140 | 64848 | 8.42 | 8.37 | 8.48 | 8.64 | 4.92 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| val | history_rich · A · D_plus_equipment-history_rich · lightgbm · histrows | history · A · D_plus_equipment-history · lightgbm · histrows | 272140 | 64848 | -0.31 | -0.33 | -0.30 |
+| val | history_rich · A · D_plus_equipment-history_rich · mlp · histrows · s42 | history · A · D_plus_equipment-history · mlp · histrows · s42 | 272140 | 64848 | -0.35 | -0.36 | -0.33 |
+| val | history_rich · A · D_plus_equipment-history_rich · lightgbm · histrows | history · A · D_plus_equipment · last_deadlift · histrows | 272140 | 64848 | -4.98 | -5.07 | -4.90 |
+| val | history_rich · A · D_plus_equipment-history_rich · mlp · histrows · s42 | history_rich · A · D_plus_equipment-history_rich · lightgbm · histrows | 272140 | 64848 | -0.04 | -0.05 | -0.02 |
+
+## history_rich_B — partition `val`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| chrono · B · D_plus_equipment · last_deadlift · histrows | last_deadlift | D_plus_equipment | 279563 | 116639 | 12.60 | 12.51 | 12.69 | 13.90 | 7.60 | 0.87 |
+| chrono · B · D_plus_equipment-history · lightgbm · histrows | lightgbm | D_plus_equipment+history | 279563 | 116639 | 8.29 | 8.25 | 8.33 | 8.81 | 5.01 | 0.96 |
+| history_rich · B · D_plus_equipment-history_rich · lightgbm · histrows | lightgbm | D_plus_equipment+history_rich | 279563 | 116639 | 8.00 | 7.96 | 8.04 | 8.58 | 4.87 | 0.96 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| val | history_rich · B · D_plus_equipment-history_rich · lightgbm · histrows | chrono · B · D_plus_equipment-history · lightgbm · histrows | 279563 | 116639 | -0.29 | -0.30 | -0.28 |
+| val | history_rich · B · D_plus_equipment-history_rich · lightgbm · histrows | chrono · B · D_plus_equipment · last_deadlift · histrows | 279563 | 116639 | -4.60 | -4.66 | -4.54 |
+
 ## Subgroups (protocol A, feature set D; protocol B LightGBM)
 
 | run_id | group_by | group | rows | lifters | mae | mape | r2 | sparse |
@@ -440,6 +474,9 @@ Paired MAE differences (a − b; negative = a better):
 | history__A__D_plus_equipment__last_deadlift__histrows | history | A | D_plus_equipment | last_deadlift | 42 | 1264025 | 301327 | 272140 | 0.29 | 13.45 |
 | history__A__D_plus_equipment__lightgbm__histrows | history | A | D_plus_equipment | lightgbm | 42 | 1264025 | 301327 | 272140 | 36.27 | 14.25 |
 | history__A__D_plus_equipment__linear__histrows | history | A | D_plus_equipment | linear | 42 | 1264025 | 301327 | 272140 | 1.74 | 15.59 |
+| history_rich__A__D_plus_equipment-history_rich__lightgbm__histrows | history_rich | A | D_plus_equipment+history_rich | lightgbm | 42 | 1264025 | 301327 | 272140 | 99.36 | 8.46 |
+| history_rich__A__D_plus_equipment-history_rich__mlp__histrows__s42 | history_rich | A | D_plus_equipment+history_rich | mlp | 42 | 1264025 | 301327 | 272140 | 64.21 | 8.42 |
+| history_rich__B__D_plus_equipment-history_rich__lightgbm__histrows | history_rich | B | D_plus_equipment+history_rich | lightgbm | 42 | 1223622 | 301072 | 279563 | 120.81 | 8.00 |
 | transfer__C-Equipment-Multi-ply__A_squat__ratio | transfer | C:Equipment=Multi-ply | A_squat | ratio | 42 | 1783370 | 545204 | 383325 | 3.69 | 21.35 |
 | transfer__C-Equipment-Multi-ply__C_plus_demographics__lightgbm | transfer | C:Equipment=Multi-ply | C_plus_demographics | lightgbm | 42 | 1783370 | 545204 | 383325 | 33.23 | 14.51 |
 | transfer__C-Equipment-Multi-ply__C_plus_demographics__linear | transfer | C:Equipment=Multi-ply | C_plus_demographics | linear | 42 | 1783370 | 545204 | 383325 | 4.51 | 16.48 |

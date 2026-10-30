@@ -200,6 +200,17 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
                     pairs.append((vid, base))
         add(E.compare(name, ids, T, row_filter=has_h if hist else None, pairs=pairs))
 
+    # 6. follow-up: career-summary history vs previous-meet history, identical rows
+    last_a = rid("history", "A", "D_plus_equipment", "last_deadlift", hist=True)
+    ha = {m: rid("history", "A", "D_plus_equipment+history", m, s0, hist=True) for m in ["lightgbm", "mlp"]}
+    ra = {m: rid("history_rich", "A", "D_plus_equipment+history_rich", m, s0, hist=True) for m in ["lightgbm", "mlp"]}
+    add(E.compare("history_rich_A", [last_a, ha["lightgbm"], ha["mlp"], ra["lightgbm"], ra["mlp"]], T, row_filter=has_h,
+                  pairs=[(ra["lightgbm"], ha["lightgbm"]), (ra["mlp"], ha["mlp"]), (ra["lightgbm"], last_a), (ra["mlp"], ra["lightgbm"])]))
+    last_b = rid("chrono", "B", "D_plus_equipment", "last_deadlift", hist=True)
+    hb = rid("chrono", "B", "D_plus_equipment+history", "lightgbm", hist=True)
+    rb = rid("history_rich", "B", "D_plus_equipment+history_rich", "lightgbm", hist=True)
+    add(E.compare("history_rich_B", [last_b, hb, rb], T, row_filter=has_h, pairs=[(rb, hb), (rb, last_b)]))
+
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)
     subs += E.subgroups([ch[2]], T)

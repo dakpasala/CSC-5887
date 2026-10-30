@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -87,7 +87,13 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
             runs.append(RunSpec("transfer", proto, fs, "lightgbm", tune_from=f"ablation__A__{fs}__lightgbm"))
         runs.append(RunSpec("transfer", proto, with_field, "mlp", seed=seeds[0]))
 
-    # 5. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 5. Follow-up: career-summary history features (designed after the main test
+    #    results were reported; tuned and selected on validation only).
+    runs.append(RunSpec("history_rich", "A", "D_plus_equipment+history_rich", "lightgbm", history_only=True))
+    runs.append(RunSpec("history_rich", "A", "D_plus_equipment+history_rich", "mlp", seed=seeds[0], history_only=True))
+    runs.append(RunSpec("history_rich", "B", "D_plus_equipment+history_rich", "lightgbm", history_only=True))
+
+    # 6. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

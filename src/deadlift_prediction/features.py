@@ -16,6 +16,11 @@ from .data import TARGET
 NUMERIC_SAME_MEET = {"Best3SquatKg", "Best3BenchKg", "BodyweightKg", "Age"}
 CATEGORICAL_SAME_MEET = {"Sex", "Equipment", "Federation"}
 HISTORY_FEATURES = {"prev_squat", "prev_bench", "prev_deadlift", "days_since_prev", "n_prev_meets"}
+# Follow-up experiment (added after the main test results were reported; tuned on
+# validation only): career summaries over all strictly earlier meets.
+HISTORY_RICH_FEATURES = {"best_prev_squat", "best_prev_bench", "best_prev_deadlift", "mean_prev_dl_sq_ratio",
+                         "mean_prev_dl_sb_ratio", "prev2_deadlift", "days_since_first", "prev_same_equipment"}
+HISTORY_FEATURES = HISTORY_FEATURES | HISTORY_RICH_FEATURES
 ALLOWED_INPUTS = NUMERIC_SAME_MEET | CATEGORICAL_SAME_MEET | HISTORY_FEATURES
 
 FORBIDDEN = {
@@ -33,15 +38,20 @@ FEATURE_SETS: dict[str, dict[str, list[str]]] = {
     "E_plus_federation": {"numeric": ["Best3SquatKg", "Best3BenchKg", "BodyweightKg", "Age"], "categorical": ["Sex", "Equipment", "Federation"]},
 }
 HISTORY_NUMERIC = ["prev_squat", "prev_bench", "prev_deadlift", "days_since_prev", "n_prev_meets"]
+HISTORY_RICH = ["best_prev_squat", "best_prev_bench", "best_prev_deadlift", "mean_prev_dl_sq_ratio",
+                "mean_prev_dl_sb_ratio", "prev2_deadlift", "days_since_first", "prev_same_equipment"]
 CORE_ABLATION = ["A_squat", "B_squat_bench", "C_plus_demographics", "D_plus_equipment"]
 
 
 def feature_spec(name: str) -> dict[str, list[str]]:
-    """Resolve a feature-set name; a `+history` suffix appends the history block."""
+    """Resolve a feature-set name; `+history` appends the previous-meet block and
+    `+history_rich` appends it plus the career-summary block."""
     base, _, extra = name.partition("+")
     spec = {k: list(v) for k, v in FEATURE_SETS[base].items()}
     if extra == "history":
         spec["numeric"] += HISTORY_NUMERIC
+    elif extra == "history_rich":
+        spec["numeric"] += HISTORY_NUMERIC + HISTORY_RICH
     elif extra:
         raise KeyError(name)
     spec = {"numeric": spec["numeric"], "categorical": spec["categorical"]}
@@ -149,7 +159,7 @@ class Preprocessor:
 # ---------------------------------------------------------------------------- history
 
 def add_history(df: pd.DataFrame) -> pd.DataFrame:
-    """Previous-meet features computed strictly from earlier dates.
+    """Past-only history features computed strictly from earlier dates.
 
     For each (lifter, date), the "meet" on that day is represented by its row
     with the largest squat+bench+deadlift (ties broken by row_id). The previous
@@ -157,14 +167,26 @@ def add_history(df: pd.DataFrame) -> pd.DataFrame:
     before the target date. Rows on the same day never see each other, since
     their ordering within a day is unknown. n_prev_meets counts distinct earlier
     dates. Rows without an earlier date get NaN history and has_history=False.
+
+    Career summaries (best_prev_*, mean_prev_* ratios, prev2_deadlift,
+    days_since_first) aggregate over all strictly earlier representatives.
+    prev_same_equipment compares the previous meet's equipment with the target
+    row's own equipment.
     """
     need = ["lifter_key", "Date", "row_id", "Best3SquatKg", "Best3BenchKg", "Best3DeadliftKg"]
-    rep = df[need].copy()
+    has_eq = "Equipment" in df.columns
+    rep = df[need + (["Equipment"] if has_eq else [])].copy()
     rep["_sbd"] = rep["Best3SquatKg"] + rep["Best3BenchKg"] + rep["Best3DeadliftKg"]
     rep = rep.sort_values(["lifter_key", "Date", "_sbd", "row_id"], ascending=[True, True, False, True], kind="mergesort")
     rep = rep.drop_duplicates(["lifter_key", "Date"], keep="first")  # one row per lifter-day
-    rep = rep.sort_values(["lifter_key", "Date"], kind="mergesort")
+    rep = rep.sort_values(["lifter_key", "Date"], kind="mergesort").reset_index(drop=True)
+    rep["_r_sq"] = rep["Best3DeadliftKg"] / rep["Best3SquatKg"]
+    rep["_r_sb"] = rep["Best3DeadliftKg"] / (rep["Best3SquatKg"] + rep["Best3BenchKg"])
     g = rep.groupby("lifter_key", sort=False)
+    n_prev = g.cumcount().to_numpy().astype("float64")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean_sq = (g["_r_sq"].cumsum() - rep["_r_sq"]).to_numpy() / n_prev
+        mean_sb = (g["_r_sb"].cumsum() - rep["_r_sb"]).to_numpy() / n_prev
     hist = pd.DataFrame({
         "lifter_key": rep["lifter_key"].to_numpy(),
         "Date": rep["Date"].to_numpy(),
@@ -172,11 +194,30 @@ def add_history(df: pd.DataFrame) -> pd.DataFrame:
         "prev_squat": g["Best3SquatKg"].shift(1).to_numpy(),
         "prev_bench": g["Best3BenchKg"].shift(1).to_numpy(),
         "prev_deadlift": g["Best3DeadliftKg"].shift(1).to_numpy(),
-        "n_prev_meets": g.cumcount().to_numpy().astype("float64"),
+        "n_prev_meets": n_prev,
+        "prev2_deadlift": g["Best3DeadliftKg"].shift(2).to_numpy(),
+        "first_date": g["Date"].transform("first").to_numpy(),
+        "mean_prev_dl_sq_ratio": np.where(n_prev > 0, mean_sq, np.nan),
+        "mean_prev_dl_sb_ratio": np.where(n_prev > 0, mean_sb, np.nan),
     })
-    out = df.drop(columns=[c for c in [*HISTORY_NUMERIC, "has_history", "prev_date"] if c in df.columns])
+    for lift, name in [("Best3SquatKg", "best_prev_squat"), ("Best3BenchKg", "best_prev_bench"),
+                       ("Best3DeadliftKg", "best_prev_deadlift")]:
+        hist[name] = g[lift].cummax().groupby(rep["lifter_key"], sort=False).shift(1).to_numpy()
+    if has_eq:
+        hist["_prev_eq"] = g["Equipment"].shift(1).to_numpy()
+
+    drop = [*HISTORY_NUMERIC, *HISTORY_RICH, "has_history", "prev_date"]
+    out = df.drop(columns=[c for c in drop if c in df.columns])
     out = out.merge(hist, on=["lifter_key", "Date"], how="left", validate="many_to_one")
-    out["days_since_prev"] = (out["Date"] - out["prev_date"]).dt.days.astype("float64")
     out["has_history"] = out["prev_date"].notna()
+    out["days_since_prev"] = (out["Date"] - out["prev_date"]).dt.days.astype("float64")
+    out["days_since_first"] = np.where(out["has_history"], (out["Date"] - out["first_date"]).dt.days, np.nan)
+    if has_eq:
+        same = (out["_prev_eq"] == out["Equipment"]).astype("float64")
+        out["prev_same_equipment"] = same.where(out["has_history"])
+        out = out.drop(columns="_prev_eq")
+    else:
+        out["prev_same_equipment"] = np.nan
+    out = out.drop(columns="first_date")
     assert (out.loc[out["has_history"], "prev_date"] < out.loc[out["has_history"], "Date"]).all()
     return out
