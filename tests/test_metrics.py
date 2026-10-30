@@ -37,3 +37,25 @@ def test_bootstrap_by_lifter_brackets_mean():
     # constant within-lifter -> resampling lifters is the only source of variation
     lo2, hi2 = bootstrap_mean_ci(np.ones(10), np.repeat([0, 1], 5), reps=50, seed=1)
     assert lo2 == hi2 == 1.0
+
+
+def test_pinball_hand_calculated():
+    from deadlift_prediction.metrics import pinball
+
+    # y - q = [10, -10]: alpha=0.9 -> (0.9*10 + 0.1*10)/2 = 5
+    assert pinball([110.0, 90.0], [100.0, 100.0], 0.9) == pytest.approx(5.0)
+    assert pinball([100.0], [100.0], 0.1) == 0.0
+
+
+def test_conformal_correction_reaches_target_coverage():
+    from deadlift_prediction.intervals import conformal_correction
+
+    rng = np.random.default_rng(0)
+    y = rng.normal(0, 10, 20000)
+    lo, hi = np.full_like(y, -5.0), np.full_like(y, 5.0)  # too narrow (~38% coverage)
+    q = conformal_correction(y, lo, hi, 0.8)
+    y2 = rng.normal(0, 10, 20000)  # fresh data stands in for test
+    cov = np.mean((y2 >= lo - q) & (y2 <= hi + q))
+    assert q > 0 and abs(cov - 0.8) < 0.015
+    # an over-wide range is narrowed (negative correction)
+    assert conformal_correction(y, np.full_like(y, -50.0), np.full_like(y, 50.0), 0.8) < 0

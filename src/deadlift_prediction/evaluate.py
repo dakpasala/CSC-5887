@@ -218,6 +218,10 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
         add(E.compare(f"ensemble|{run_id.split('__')[1]}|{'history_rich' if hist else 'D'}", [lgbm_id, mlp_id, run_id], T,
                       row_filter=has_h if hist else None, pairs=[(run_id, lgbm_id), (run_id, mlp_id)]))
 
+    # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
+    from .intervals import evaluate_intervals
+    evaluate_intervals(cfg, final, E.ctx)
+
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)
     subs += E.subgroups([ch[2]], T)

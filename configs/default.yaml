@@ -73,6 +73,14 @@ capacity:
     lgbm_big: {model: lightgbm, overrides: {learning_rate: 0.03, n_estimators: 8000,
                                             fixed_grid: [{num_leaves: 511, min_child_samples: 50}]}}
 
+# Follow-up #6: prediction ranges. LightGBM quantile models (10th and 90th
+# percentiles, nominal 80% range) reuse protocol-A-selected tree settings. A
+# conformal correction (CQR) is estimated on VALIDATION rows only; coverage is
+# then checked on test.
+quantile:
+  levels: [0.1, 0.9]
+  target_coverage: 0.8
+
 evaluation:
   bootstrap_reps: 200
   sparse_rows: 100

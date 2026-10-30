@@ -11,6 +11,12 @@ def mae(y, yhat) -> float:
     return float(np.mean(np.abs(y - yhat))) if len(y) else float("nan")
 
 
+def pinball(y, q, alpha: float) -> float:
+    """Mean pinball (quantile) loss of predicted quantile q at level alpha."""
+    d = np.asarray(y, float) - np.asarray(q, float)
+    return float(np.mean(np.maximum(alpha * d, (alpha - 1) * d))) if len(d) else float("nan")
+
+
 def mape(y, yhat) -> tuple[float | None, str | None]:
     y, yhat = np.asarray(y, float), np.asarray(yhat, float)
     if len(y) == 0:

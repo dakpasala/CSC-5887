@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--existing", type=Path, help="register an already-downloaded zip instead of fetching")
     add("prepare", "clean, audit, compute history, freeze splits")
     p = add("train", "fit all planned runs (skips finished runs)")
-    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich"])
+    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile"])
     p.add_argument("--only", help="substring filter on run IDs")
     p.add_argument("--force", action="store_true")
     add("ensemble", "build LightGBM+MLP ensembles from finished runs (weight chosen on validation)")

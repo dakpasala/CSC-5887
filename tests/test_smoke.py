@@ -19,6 +19,9 @@ def test_synthetic_pipeline_end_to_end():
     assert len(runs) == len(out["runs"]) + len(out["ensembles"])
     assert len(out["ensembles"]) == 3
     assert any(c.startswith("ensemble|") for c in m["comparison"])
+    iv = pd.read_csv(root / "tables_final" / "intervals.csv")
+    assert {"raw", "conformal"} <= set(iv["interval"]) and {"val", "test"} <= set(iv["partition"])
+    assert iv["coverage"].between(0, 1).all()
     p = pd.read_parquet(runs[0])
     assert {"row_id", "lifter_key", "partition", "y", "yhat"} <= set(p.columns)
     assert "SYNTHETIC" in (reports_dir(cfg) / "results_test.md").read_text()

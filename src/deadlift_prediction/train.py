@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -93,7 +93,14 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     runs.append(RunSpec("history_rich", "A", "D_plus_equipment+history_rich", "mlp", seed=seeds[0], history_only=True))
     runs.append(RunSpec("history_rich", "B", "D_plus_equipment+history_rich", "lightgbm", history_only=True))
 
-    # 6. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 6. Follow-up: quantile LightGBM for prediction ranges (validation-calibrated).
+    for fs, hist, tf in [("D_plus_equipment", False, "ablation__A__D_plus_equipment__lightgbm"),
+                         ("D_plus_equipment+history_rich", True, "history_rich__A__D_plus_equipment-history_rich__lightgbm__histrows")]:
+        for q in cfg.get("quantile", {}).get("levels", []):
+            runs.append(RunSpec("quantile", "A", fs, "lightgbm", history_only=hist, tune_from=tf, variant=f"q{round(q * 100):02d}",
+                                overrides={"objective": "quantile", "alpha": q}))
+
+    # 7. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

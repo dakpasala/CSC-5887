@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .features import Preprocessor, feature_spec
-from .metrics import mae
+from .metrics import mae, pinball
 
 
 class BaseModel:
@@ -116,7 +116,9 @@ class LinearModel(BaseModel):
 class LightGBMModel(BaseModel):
     """LightGBM regression. Numerics are passed raw (NaN handled natively);
     categoricals as integer codes declared categorical, code 0 = unknown.
-    Small grid; each candidate uses validation early stopping on L1."""
+    Small grid; each candidate uses validation early stopping on L1. With
+    objective="quantile" (follow-up #6) the model predicts the `alpha` quantile;
+    early stopping and selection then use validation pinball loss."""
 
     kind = "lightgbm"
 
@@ -127,25 +129,29 @@ class LightGBMModel(BaseModel):
         Xtr, Xva = self.prep.tree_frame(train), self.prep.tree_frame(val)
         p = self.params
         grid = p.get("fixed_grid") or p["grid"]
+        quantile = p["objective"] == "quantile"
+        extra = {"alpha": p["alpha"]} if quantile else {}
+        metric = "quantile" if quantile else "l1"
         best = None
         for cand in grid:
             m = lgb.LGBMRegressor(
                 objective=p["objective"], learning_rate=p["learning_rate"], n_estimators=p["n_estimators"],
-                random_state=self.seed, n_jobs=os.cpu_count(), verbose=-1, **cand,
+                random_state=self.seed, n_jobs=os.cpu_count(), verbose=-1, **extra, **cand,
             )
             t0 = time.time()
-            m.fit(Xtr, y_train, eval_X=(Xva,), eval_y=(y_val,), eval_metric="l1",
+            m.fit(Xtr, y_train, eval_X=(Xva,), eval_y=(y_val,), eval_metric=metric,
                   callbacks=[lgb.early_stopping(p["early_stopping_rounds"], verbose=False)])
-            score = mae(y_val, m.predict(Xva, num_iteration=m.best_iteration_))
+            pred = m.predict(Xva, num_iteration=m.best_iteration_)
+            score = pinball(y_val, pred, p["alpha"]) if quantile else mae(y_val, pred)
             self.tuning.append({**cand, "best_iteration": int(m.best_iteration_ or p["n_estimators"]),
-                                "val_mae": score, "seconds": time.time() - t0})
+                                ("val_pinball" if quantile else "val_mae"): score, "seconds": time.time() - t0})
             if best is None or score < best[0]:
                 best = (score, cand, m)
         _, cand, self.model = best
-        self.selected = {"objective": p["objective"], "learning_rate": p["learning_rate"], **cand,
+        self.selected = {"objective": p["objective"], **extra, "learning_rate": p["learning_rate"], **cand,
                          "best_iteration": int(self.model.best_iteration_ or p["n_estimators"]),
                          "categorical_representation": "integer codes as LightGBM categorical; 0 = unknown/infrequent/missing",
-                         "early_stopping": f"validation L1, patience {p['early_stopping_rounds']}"}
+                         "early_stopping": f"validation {metric}, patience {p['early_stopping_rounds']}"}
         return self
 
     def predict(self, df):

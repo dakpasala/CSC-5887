@@ -163,6 +163,26 @@ Averaging gives no gain without history and less than 0.1 kg with it. The two mo
 errors, which fits the earlier conclusion that the inputs, not the model, are the limit. The best test result
 for returning lifters is the career-history ensemble, at **8.32 kg**.
 
+#### Follow-up: prediction ranges (post-hoc)
+
+Two LightGBM quantile models predict the 10th and 90th percentiles, which together give a nominal 80% range.
+They reuse the protocol-A tree settings and early-stop on validation pinball loss. A conformal correction (CQR)
+is then estimated on **validation rows only** and applied unchanged to test.
+
+| Test rows | Correction | Coverage, raw | Coverage, calibrated | Median width |
+|---|---|---|---|---|
+| A, feature set D (386,613) | +0.30 kg | 79.4% | **80.0%** | 45 kg |
+| A, + career history (268,289) | +0.56 kg | 78.2% | **80.3%** | 24 kg |
+
+Misses are balanced: about 10% of rows fall below the range and about 10% above. Coverage holds within about
+1.5 points across Sex, bodyweight bins, and equipment. The exceptions are Mx (71%, 14 rows) and Multi-ply with
+history (77%). Ranges widen with lift size: about 33 kg for women versus 50 kg for men without history.
+
+A typical range is about ±22 kg around the prediction, or about ±12 kg with history. Ranges don't make point
+predictions more accurate. They state honestly how uncertain a single same-meet reference value is. Validation
+rows from one lifter are correlated, and the quantile models also early-stopped on validation, so the coverage
+guarantee is approximate. Test coverage is the independent check, and it matched.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -268,6 +288,7 @@ prediction, not evidence about any lifter.
 - "Predicting a Successful Attempt in Raw Powerlifting. A Nonlinear Mixed Logistic Regression Analysis" (DCU,
   2025; https://doras.dcu.ie/31743/). This models attempt success, a different target. The author list could not
   be extracted and is cited from the repository URL ("Darragh et al.").
+- Y. Romano, E. Patterson, E. Candès, "Conformalized Quantile Regression," NeurIPS 2019 (the calibration method used for ranges).
 - G. Ke et al., "LightGBM: A Highly Efficient Gradient Boosting Decision Tree," NeurIPS 2017 (the library used here).
 
 No novelty is claimed beyond the combination reported: same-meet prediction with controlled ablations, past-only
@@ -277,10 +298,10 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 41 tests
+.venv/bin/pytest -q                                    # 43 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history runs
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile runs
 .venv/bin/deadlift ensemble  --config configs/default.yaml   # 3 LightGBM+MLP ensembles
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
