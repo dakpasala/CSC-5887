@@ -26,6 +26,11 @@ PAIRS = [
      "history_rich__A__D_plus_equipment-history_rich__mlp__histrows__s42"),
     ("ensemble__B__D_plus_equipment__lgbm_mlp",
      "chrono__B__D_plus_equipment__lightgbm", "chrono__B__D_plus_equipment__mlp__s42"),
+    ("ensemble__A__X_all-anyhist__lgbm_mlp",
+     "expanded__A__X_all-anyhist__lightgbm", "expanded__A__X_all-anyhist__mlp__s42"),
+    ("ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows",
+     "expanded__A__X_all-history_rich-anyhist__lightgbm__histrows",
+     "expanded__A__X_all-history_rich-anyhist__mlp__histrows__s42"),
 ]
 
 

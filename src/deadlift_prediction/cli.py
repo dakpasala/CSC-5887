@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--existing", type=Path, help="register an already-downloaded zip instead of fetching")
     add("prepare", "clean, audit, compute history, freeze splits")
     p = add("train", "fit all planned runs (skips finished runs)")
-    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile"])
+    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile", "expanded"])
     p.add_argument("--only", help="substring filter on run IDs")
     p.add_argument("--force", action="store_true")
     add("ensemble", "build LightGBM+MLP ensembles from finished runs (weight chosen on validation)")
@@ -65,6 +65,10 @@ def smoke(config: str | Path | None = None) -> dict:
 
     cfg = load_config(config or PROJECT_ROOT / "configs" / "smoke.yaml")
     assert cfg["synthetic"], "smoke must use a synthetic config"
+    import shutil
+
+    from .config import artifacts_dir
+    shutil.rmtree(artifacts_dir(cfg) / "runs", ignore_errors=True)  # synthetic runs only; start clean
     summary = prepare(cfg)
     metas = train(cfg, force=True)
     from .ensemble import build_ensembles

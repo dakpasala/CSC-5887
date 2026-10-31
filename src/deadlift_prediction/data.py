@@ -31,11 +31,17 @@ VALID_EQUIPMENT = {"Raw", "Wraps", "Single-ply", "Multi-ply", "Unlimited", "Stra
 # Columns carried into the cleaned table. Post-outcome fields (Place, TotalKg,
 # Dots, Wilks, Glossbrenner, Goodlift, attempts) are deliberately dropped here so
 # they cannot reach any downstream feature code.
+# Expanded-input follow-up: squat/bench attempts (deadlift attempts are never
+# kept), age classes, and home country. 4th attempts are excluded.
+ATTEMPT_COLUMNS = ["Squat1Kg", "Squat2Kg", "Squat3Kg", "Bench1Kg", "Bench2Kg", "Bench3Kg"]
+EXTRA_COLUMNS = [*ATTEMPT_COLUMNS, "AgeClass", "BirthYearClass", "Country"]
+
 CLEAN_COLUMNS = [
     "row_id", "lifter_key", "meet_key", "Sex", "Equipment", "Age", "BodyweightKg",
     "Best3SquatKg", "Best3BenchKg", "Best3DeadliftKg", "Federation", "ParentFederation",
-    "Tested", "MeetCountry", "Date",
+    "Tested", "MeetCountry", "Date", *EXTRA_COLUMNS,
 ]
+AUX_COLUMNS = ["Name", "Event", "Equipment", "Date", "Best3DeadliftKg"]
 
 
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
@@ -135,8 +141,9 @@ def read_raw_table(archive: Path, columns: list[str] | None = None) -> pa.Table:
     return pacsv.read_csv(buf, convert_options=convert)
 
 
-def load_raw_sbd(cfg: dict) -> tuple[pd.DataFrame, dict]:
-    """Return SBD rows (all columns as strings) plus snapshot metadata."""
+def load_raw_sbd(cfg: dict) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    """Return SBD rows (all columns as strings), snapshot metadata, and the raw
+    deadlift rows of *every* event (for cross-event history)."""
     meta = read_json(snapshot_meta_path(cfg))
     archive = resolve(cfg, "data.raw_dir") / meta["archive"]
     table = read_raw_table(archive)
@@ -144,8 +151,10 @@ def load_raw_sbd(cfg: dict) -> tuple[pd.DataFrame, dict]:
         raise ValueError("raw row count does not match registered snapshot")
     event_counts = table.column("Event").value_counts().to_pylist()
     meta = dict(meta, event_counts={d["values"]: d["counts"] for d in event_counts})
+    aux = table.select(AUX_COLUMNS).to_pandas()
     sbd = table.filter(pc.equal(table.column("Event"), "SBD"))
-    return sbd.to_pandas(), meta
+    del table
+    return sbd.to_pandas(), meta, aux
 
 
 # --------------------------------------------------------------------------- cleaning
@@ -199,8 +208,11 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
     rowstr = df[raw_cols[0]].astype("string").fillna("")
     for c in raw_cols[1:]:
         rowstr = rowstr + "|" + df[c].astype("string").fillna("")
+    for c in EXTRA_COLUMNS:
+        if c not in df:
+            df[c] = None
     keep_cols = ["Name", "Sex", "Equipment", "Age", "BodyweightKg", *LIFTS, "Federation", "ParentFederation", "Tested",
-                 "MeetCountry", "MeetName", "Division", "Date"]
+                 "MeetCountry", "MeetName", "Division", "Date", *EXTRA_COLUMNS]
     df = df[keep_cols].assign(_rowstr=rowstr.to_numpy())
     del rowstr
 
@@ -269,6 +281,8 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
         "invalid_equipment": int(bad_eq.sum()),
     }
 
+    for c in ATTEMPT_COLUMNS:
+        df[c] = _to_float(df[c])
     df["row_id"] = _hash_unique(df["_rowstr"], "")
     df = df.drop(columns="_rowstr")
     if df["row_id"].duplicated().any():
@@ -293,3 +307,27 @@ def clean(raw: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[dict], dict]
     identity_frame = df[["lifter_key", "Name", "Sex", "Date", "Age", "meet_key"]].copy()
     df = df.sort_values(["Date", "row_id"]).reset_index(drop=True)
     return df[CLEAN_COLUMNS].copy(), log, {**audit, "_identity_frame": identity_frame}
+
+
+def clean_aux(aux: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
+    """Successful deadlifts from any event (SBD, D, BD, SD, including SBD entries
+    that failed squat or bench), used only as strictly-earlier history context.
+
+    Same identity key and lifter sampling as the main table. One row per
+    lifter, date, equipment, and deadlift value (removes multi-division
+    listings). Deadlift-only exhibition entries are kept, as in the source.
+    """
+    a = aux.copy()
+    n0 = len(a)
+    a["Best3DeadliftKg"] = _to_float(a["Best3DeadliftKg"])
+    a["Date"] = pd.to_datetime(a["Date"], format="%Y-%m-%d", errors="coerce")
+    a = a[np.isfinite(a["Best3DeadliftKg"]) & (a["Best3DeadliftKg"] > 0) & a["Date"].notna() & a["Name"].notna()]
+    n1 = len(a)
+    a = a.drop_duplicates(["Name", "Date", "Equipment", "Best3DeadliftKg"])
+    a["lifter_key"] = lifter_key(a["Name"])
+    frac = cfg["data"].get("lifter_fraction", 1.0)
+    if frac < 1.0:
+        a = a[hash_unit(a["lifter_key"], f"sample{cfg['seed']}") < frac]
+    info = {"raw_rows": int(n0), "valid_deadlift_rows": int(n1), "after_dedup_and_sampling": int(len(a)),
+            "by_event": {str(k): int(v) for k, v in a["Event"].value_counts().items()}}
+    return a[["lifter_key", "Event", "Equipment", "Date", "Best3DeadliftKg"]].reset_index(drop=True), info

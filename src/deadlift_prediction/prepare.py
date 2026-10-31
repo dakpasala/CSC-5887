@@ -8,8 +8,8 @@ import pandas as pd
 
 from . import synthetic
 from .config import config_hash, processed_dir, reports_dir, write_json
-from .data import clean, load_raw_sbd
-from .features import add_history
+from .data import clean, clean_aux, load_raw_sbd
+from .features import add_any_history, add_history, add_same_meet_extras
 from .identity import identity_audit
 from .splits import (assert_disjoint, balance_table, chrono_boundaries, chrono_split, group_split,
                      manifest_id, select_transfer_groups)
@@ -29,10 +29,11 @@ def prepare(cfg: dict) -> dict:
 
     if cfg.get("synthetic"):
         raw = synthetic.make_raw(seed=cfg["seed"])
+        aux_raw = raw[["Name", "Event", "Equipment", "Date", "Best3DeadliftKg"]].copy()
         meta = {"source_url": "SYNTHETIC FIXTURE (not OpenPowerlifting)", "sha256": "synthetic", "raw_rows": len(raw),
                 "event_counts": raw["Event"].value_counts().to_dict(), "archive": None}
     else:
-        raw, meta = load_raw_sbd(cfg)
+        raw, meta, aux_raw = load_raw_sbd(cfg)
     print(f"loaded {len(raw):,} SBD rows (raw snapshot rows: {meta['raw_rows']:,})")
 
     df, log, audit = clean(raw, cfg)
@@ -43,6 +44,10 @@ def prepare(cfg: dict) -> dict:
     print(f"cleaned: {len(df):,} rows, {df['lifter_key'].nunique():,} lifters")
 
     df = add_history(df)
+    df = add_same_meet_extras(df)
+    aux, aux_info = clean_aux(aux_raw, cfg)
+    del aux_raw
+    df = add_any_history(df, aux)
 
     df["split_A"] = group_split(df, cfg["splits"]["group"], cfg["seed"]).to_numpy()
     assert_disjoint(df, df["split_A"], by_lifter=True)
@@ -83,6 +88,15 @@ def prepare(cfg: dict) -> dict:
         "sex": _dist(df["Sex"]), "equipment": _dist(df["Equipment"]), "federation_top20": _dist(df["Federation"], 20),
         "n_federations": int(df["Federation"].nunique()),
         "history_eligible_rows": int(len(hist)), "history_eligible_lifters": int(hist["lifter_key"].nunique()),
+        "any_event_history": {
+            "aux_deadlift_table": aux_info,
+            "rows_with_any_earlier_deadlift": int(df["has_any_history"].sum()),
+            "sbd_first_timers": int((~df["has_history"]).sum()),
+            "sbd_first_timers_with_earlier_deadlift": int((~df["has_history"] & df["has_any_history"]).sum()),
+        },
+        "attempts_reported_share": {"squat": float(df["squat_n_good"].notna().mean()),
+                                    "bench": float(df["bench_n_good"].notna().mean())},
+        "age_missing_after_class_fill": float(df["age_filled"].isna().mean()),
         "target_kg": {k: float(v) for k, v in df["Best3DeadliftKg"].describe().items()},
         "split_id": split_id, "splits": splits_info,
         "partition_sizes": {

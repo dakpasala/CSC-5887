@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -100,7 +100,16 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
             runs.append(RunSpec("quantile", "A", fs, "lightgbm", history_only=hist, tune_from=tf, variant=f"q{round(q * 100):02d}",
                                 overrides={"objective": "quantile", "alpha": q}))
 
-    # 7. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 7. Follow-up: expanded inputs (squat/bench attempts, context, any-event deadlift history).
+    for fs in ["X_attempts", "X_context", "X_all", "X_all+anyhist"]:
+        runs.append(RunSpec("expanded", "A", fs, "lightgbm"))
+        runs.append(RunSpec("expanded", "A", fs, "mlp", seed=seeds[0]))
+    runs.append(RunSpec("expanded", "A", "X_all+history_rich+anyhist", "lightgbm", history_only=True))
+    runs.append(RunSpec("expanded", "A", "X_all+history_rich+anyhist", "mlp", seed=seeds[0], history_only=True))
+    runs.append(RunSpec("expanded", "B", "X_all+anyhist", "lightgbm"))
+    runs.append(RunSpec("expanded", "B", "X_all+history_rich+anyhist", "lightgbm", history_only=True))
+
+    # 8. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

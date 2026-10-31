@@ -18,6 +18,10 @@ RAW_COLUMNS = [
 ]
 
 
+def dead_base(bw: float, strength: float, sex: str) -> float:
+    return (1.6 if sex == "M" else 1.1) * bw * strength * 1.15
+
+
 def make_raw(n_lifters: int = 600, seed: int = 0) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     feds = ["FEDA", "FEDB", "FEDC", "FEDD"]
@@ -41,9 +45,18 @@ def make_raw(n_lifters: int = 600, seed: int = 0) -> pd.DataFrame:
             bench = round(base * 0.65 * rng.normal(1.0, 0.05), 1)
             dead = round(base * 1.15 * rng.normal(1.0, 0.05), 1)
             age = date.year - birth
+            if m == 0 and i % 4 == 0:  # an earlier deadlift-only meet for some lifters
+                rows.append({"Name": name, "Sex": sex, "Event": "D", "Equipment": eq, "Division": "Open",
+                             "Best3DeadliftKg": str(round(dead_base(bw, strength, sex) * 0.97, 1)), "Place": "1",
+                             "Federation": fed, "Date": (date - pd.Timedelta(days=90)).strftime("%Y-%m-%d"),
+                             "MeetCountry": "USA", "MeetName": f"DL {fed} {date:%Y%m}"})
             rows.append({
                 "Name": name, "Sex": sex, "Event": "SBD", "Equipment": eq,
                 "Age": "" if rng.random() < 0.3 else str(age), "Division": "Open",
+                "AgeClass": f"{(age // 5) * 5}-{(age // 5) * 5 + 4}",
+                "Squat1Kg": str(round(squat * 0.9, 1)), "Squat2Kg": str(round(squat, 1)),
+                "Squat3Kg": str(-round(squat * 1.04, 1)) if rng.random() < 0.4 else None,
+                "Bench1Kg": str(round(bench * 0.92, 1)), "Bench2Kg": str(round(bench, 1)), "Bench3Kg": None,
                 "BodyweightKg": "" if rng.random() < 0.05 else f"{bw:.1f}",
                 "Best3SquatKg": str(squat), "Best3BenchKg": str(bench), "Best3DeadliftKg": str(dead),
                 "TotalKg": f"{squat + bench + dead:.1f}", "Place": "1", "Federation": fed,

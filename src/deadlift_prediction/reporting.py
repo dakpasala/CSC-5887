@@ -54,6 +54,14 @@ def write_data_audit(s: dict, bal_a: pd.DataFrame, bal_b: pd.DataFrame, path: Pa
     out.append(f"\nTarget Best3DeadliftKg: mean {t['mean']:.1f}, sd {t['std']:.1f}, min {t['min']:.1f}, median {t['50%']:.1f}, max {t['max']:.1f}.\n\n")
     out.append(f"## History eligibility\n\nRows with a strictly earlier eligible meet for the same lifter: {s['history_eligible_rows']:,} "
                f"({s['history_eligible_rows'] / s['clean_rows']:.1%}); lifters with at least one such row: {s['history_eligible_lifters']:,}.\n\n")
+    if "any_event_history" in s:
+        ah = s["any_event_history"]
+        out.append(f"## Expanded inputs (follow-up)\n\n- Deadlift table across all events: {ah['aux_deadlift_table']}\n"
+                   f"- Rows with an earlier deadlift from any event: {ah['rows_with_any_earlier_deadlift']:,}\n"
+                   f"- Full-power first-timers: {ah['sbd_first_timers']:,}, of which "
+                   f"{ah['sbd_first_timers_with_earlier_deadlift']:,} have an earlier deadlift from another event\n"
+                   f"- Attempts reported: squat {s['attempts_reported_share']['squat']:.1%}, bench {s['attempts_reported_share']['bench']:.1%}\n"
+                   f"- Age missing after AgeClass/BirthYearClass fill: {s['age_missing_after_class_fill']:.1%}\n\n")
     idt = s["identity"]
     out.append("## Lifter identity\n\n" + "\n".join(f"- {k}: {v}" for k, v in idt.items() if k not in ("limitations", "rows_per_lifter")))
     out.append("\n- rows per lifter: " + ", ".join(f"{k} {v:.3g}" for k, v in idt["rows_per_lifter"].items()))

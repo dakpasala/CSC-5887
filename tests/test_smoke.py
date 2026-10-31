@@ -17,7 +17,9 @@ def test_synthetic_pipeline_end_to_end():
         assert g["rows"].nunique() == 1, comp
     runs = list((root / "runs").glob("*/predictions.parquet"))
     assert len(runs) == len(out["runs"]) + len(out["ensembles"])
-    assert len(out["ensembles"]) == 3
+    from deadlift_prediction.ensemble import PAIRS
+    assert len(out["ensembles"]) == len(PAIRS)
+    assert any(c.startswith("expanded_") for c in m["comparison"])
     assert any(c.startswith("ensemble|") for c in m["comparison"])
     iv = pd.read_csv(root / "tables_final" / "intervals.csv")
     assert {"raw", "conformal"} <= set(iv["interval"]) and {"val", "test"} <= set(iv["partition"])

@@ -36,7 +36,7 @@ class Evaluator:
         bins = cfg["features"]["bodyweight_bins"]
         df["bw_bin"] = pd.cut(df["BodyweightKg"], bins=bins, right=False).astype(object).map(
             lambda iv: f"{iv.left:g}-{iv.right:g}" if pd.notna(iv) else "missing")
-        self.ctx = df.set_index("row_id")[["Sex", "Equipment", "Federation", "bw_bin", "has_history", "BodyweightKg",
+        self.ctx = df.set_index("row_id")[["Sex", "Equipment", "Federation", "bw_bin", "has_history", "has_any_history", "BodyweightKg",
                                           "Age", "Best3SquatKg", "Best3BenchKg"]]
         self.ev = cfg["evaluation"]
         self._pred_cache: dict[str, pd.DataFrame] = {}
@@ -217,6 +217,31 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
         hist = "histrows" in run_id
         add(E.compare(f"ensemble|{run_id.split('__')[1]}|{'history_rich' if hist else 'D'}", [lgbm_id, mlp_id, run_id], T,
                       row_filter=has_h if hist else None, pairs=[(run_id, lgbm_id), (run_id, mlp_id)]))
+
+    # 9. follow-up: expanded inputs, identical rows within each comparison
+    X = lambda fs, m, hist=False: rid("expanded", "A", fs, m, s0, hist=hist)
+    d_l, d_m = rid("ablation", "A", "D_plus_equipment", "lightgbm"), rid("ablation", "A", "D_plus_equipment", "mlp", s0)
+    ens_x = "ensemble__A__X_all-anyhist__lgbm_mlp"
+    allrows = [d_l, d_m] + [X(fs, m) for fs in ["X_attempts", "X_context", "X_all", "X_all+anyhist"] for m in ["lightgbm", "mlp"]] + [ens_x]
+    pairs = [(X(fs, "lightgbm"), d_l) for fs in ["X_attempts", "X_context", "X_all", "X_all+anyhist"]]
+    pairs += [(X("X_all+anyhist", "lightgbm"), X("X_all", "lightgbm")), (ens_x, X("X_all+anyhist", "lightgbm"))]
+    add(E.compare("expanded_all_rows", allrows, T, pairs=pairs))
+    first = [ratio, d_l, X("X_all", "lightgbm"), X("X_all+anyhist", "lightgbm"), X("X_all+anyhist", "mlp"), ens_x]
+    fpairs = [(X("X_all", "lightgbm"), d_l), (X("X_all+anyhist", "lightgbm"), d_l), (ens_x, d_l)]
+    add(E.compare("expanded_sbd_first_timers", first, T, row_filter=no_h, pairs=fpairs))
+    other = lambda c: (~c["has_history"].to_numpy(bool)) & c["has_any_history"].to_numpy(bool)
+    add(E.compare("expanded_first_timers_with_other_event_deadlift", first, T, row_filter=other, pairs=fpairs))
+    hr = {m: rid("history_rich", "A", "D_plus_equipment+history_rich", m, s0, hist=True) for m in ["lightgbm", "mlp"]}
+    hx = {m: X("X_all+history_rich+anyhist", m, hist=True) for m in ["lightgbm", "mlp"]}
+    ens_hr = "ensemble__A__D_plus_equipment-history_rich__lgbm_mlp__histrows"
+    ens_hx = "ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows"
+    add(E.compare("expanded_history_eligible", [last_a, hr["lightgbm"], hr["mlp"], ens_hr, hx["lightgbm"], hx["mlp"], ens_hx], T,
+                  row_filter=has_h, pairs=[(hx["lightgbm"], hr["lightgbm"]), (hx["mlp"], hr["mlp"]), (ens_hx, ens_hr), (ens_hx, last_a)]))
+    bx = rid("expanded", "B", "X_all+anyhist", "lightgbm")
+    add(E.compare("expanded_chrono_all", [rid("chrono", "B", "D_plus_equipment", "lightgbm"), bx], T,
+                  pairs=[(bx, rid("chrono", "B", "D_plus_equipment", "lightgbm"))]))
+    bhx = rid("expanded", "B", "X_all+history_rich+anyhist", "lightgbm", hist=True)
+    add(E.compare("expanded_chrono_history_eligible", [last_b, rb, bhx], T, row_filter=has_h, pairs=[(bhx, rb), (bhx, last_b)]))
 
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
