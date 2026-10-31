@@ -89,6 +89,14 @@ Target Best3DeadliftKg: mean 185.4, sd 61.1, min 1.0, median 183.7, max 492.5.
 
 Rows with a strictly earlier eligible meet for the same lifter: 1,804,454 (69.5%); lifters with at least one such row: 430,939.
 
+## Expanded inputs (follow-up)
+
+- Deadlift table across all events: {'raw_rows': 4054260, 'valid_deadlift_rows': 3032642, 'after_dedup_and_sampling': 2859715, 'by_event': {'SBD': 2625881, 'D': 176270, 'BD': 55249, 'SD': 2315}}
+- Rows with an earlier deadlift from any event: 1,834,361
+- Full-power first-timers: 790,306, of which 29,907 have an earlier deadlift from another event
+- Attempts reported: squat 45.6%, bench 45.6%
+- Age missing after AgeClass/BirthYearClass fill: 30.1%
+
 ## Lifter identity
 
 - canonical_identity: OPL Name including '#n' disambiguation suffix; hashed to lifter_key

@@ -183,6 +183,44 @@ predictions more accurate. They state honestly how uncertain a single same-meet 
 rows from one lifter are correlated, and the quantile models also early-stopped on validation, so the coverage
 guarantee is approximate. Test coverage is the independent check, and it matched.
 
+#### Follow-up: expanded inputs (post-hoc, team-approved widening of the allowlist)
+
+The original allowlist was widened. Deadlift attempts, totals, scores, placings, and anything else derived from
+the result remain forbidden. The new inputs:
+
+- **Squat and bench attempts** (deadlift attempts never used): opener ÷ best, third attempt ÷ best (above 1 when a
+  heavier third was missed), and number of good lifts. Reported for 45.6% of rows; missing elsewhere.
+- **Context:** age filled from AgeClass/BirthYearClass (missing age falls from 42.6% to 30.1%), drug-tested status,
+  home country, parent federation, meet year, and federation.
+- **Any-event deadlift history:** successful deadlifts from earlier deadlift-only, push-pull, and squat-deadlift
+  entries, plus full-power entries that failed another lift. That adds 233,834 non-full-power deadlift meets.
+  Strictly earlier dates only; tests check same-day exclusion, order independence, and a brute-force recomputation.
+
+Test MAE, identical rows within each block:
+
+| Rows | Before | After | Paired Δ |
+|---|---|---|---|
+| All 386,613 test rows, LightGBM, same-meet inputs only: D → X_all (attempts + context) | 14.08 | 13.68 | −0.40 [−0.43, −0.38] |
+| … attempts alone | 14.08 | 14.02 | −0.06 [−0.07, −0.05] |
+| … context alone | 14.08 | 13.71 | −0.37 [−0.40, −0.35] |
+| **Full-power first-timers** (118,324): D LightGBM → X_all + any-event history, ensemble | 13.80 | **13.04** | −0.76 [−0.79, −0.73] |
+| First-timers with an earlier deadlift-only or push-pull meet (4,400) | 15.36 | **10.39** | −4.97 [−5.29, −4.64] |
+| Returning lifters (268,289): career-history ensemble → + all new inputs, ensemble | 8.32 | **8.25** | −0.07 [−0.08, −0.06] |
+| Later meets (B), returning lifters, LightGBM | 8.17 | 8.11 | −0.06 [−0.07, −0.05] |
+| **All test lifters, best system** (first-timer model + returning-lifter model) | 10.00 | **9.71** | −0.28 [−0.29, −0.27] |
+
+- **First-timers gain the most.** Their error falls by 0.76 kg overall, and by about 5 kg for the 3.7% who have a
+  deadlift from another kind of meet. Only those few gain much, because most full-power first-timers have no
+  earlier deadlift anywhere.
+- **Returning lifters barely change.** The previous meet already carries most of the signal.
+- **One model for everyone loses to two specialists.** A single model across all rows reaches 10.19 kg, worse
+  than routing each lifter to its specialist (9.71). The "14.1 → 10.2" all-rows comparison mainly re-measures the
+  value of history.
+- **Attempts help least.** Squat and bench attempt details are the weakest new group (−0.06 kg), partly because
+  more than half of federations don't report attempts.
+- **Context helps more.** It is worth about 0.37 kg; federation alone accounts for about 0.25 kg of that (see the E
+  extension).
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -236,6 +274,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Career-level history will cut error by another 0.5–1.5 kg."** It cut error by 0.32 kg. That's real, but the
   previous meet already carries most of the signal.
 - **"Averaging LightGBM and the MLP will gain 0.1–0.3 kg."** It gained 0–0.09 kg; the two models' errors are highly correlated.
+- **"Squat/bench attempt details will help first-timers."** Only marginally (−0.06 kg); age-class fill and context helped more.
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -298,11 +337,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 43 tests
+.venv/bin/pytest -q                                    # 47 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 3 LightGBM+MLP ensembles
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 5 LightGBM+MLP ensembles
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```
