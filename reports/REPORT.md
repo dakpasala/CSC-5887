@@ -221,6 +221,40 @@ Test MAE, identical rows within each block:
 - **Context helps more.** It is worth about 0.37 kg; federation alone accounts for about 0.25 kg of that (see the E
   extension).
 
+#### Follow-up: LightGBM loss and target (post-hoc)
+
+The base LightGBM uses squared error, while the primary metric is MAE. For the two expanded-input specialists, four
+variants were trained on validation, reusing the same tree settings:
+
+- L1 loss
+- Huber loss (δ = 10 kg)
+- predicting deadlift ÷ squat with squared error
+- predicting deadlift ÷ squat with L1
+
+The ratio fits weight each row by squat (L1) or squat² (L2), so the loss stays on the kg scale. The winner per
+specialist was the lowest validation MAE, base included.
+
+| Test MAE (kg), identical rows | Base (L2) | L1 | **Huber** | Ratio, L2 | Ratio, L1 |
+|---|---|---|---|---|---|
+| All-lifter model (386,613) | 10.29 | 10.24 | **10.20** | 10.31 | 10.29 |
+| Returning-lifter model (268,289) | 8.36 | 8.32 | **8.25** | 8.47 | 8.40 |
+
+- **Huber wins for both** on validation and on test. Paired Δ versus base is −0.09 [−0.10, −0.08] and
+  −0.11 [−0.12, −0.10]. It limits the pull of extreme or mis-entered rows without discarding them.
+- **The ratio target doesn't help.** It is slightly worse with history (+0.04 to +0.11 kg): trees already model
+  the deadlift-to-squat relationship, and the ratio form amplifies noise for small squats.
+
+**Best system (routed: first-timer model, or returning-lifter model when an earlier full-power meet exists):**
+
+| Test rows | Original specialists | + expanded inputs | **+ Huber** |
+|---|---|---|---|
+| All lifters (386,613 / 118,000) | 10.00 | 9.71 | **9.68** [9.64, 9.73] |
+| First-timers (118,324) | 13.80 | 13.04 | **13.03** |
+| Returning lifters (268,289) | 8.32 | 8.25 | **8.21** |
+
+Against the original specialists, the paired Δ for all lifters is −0.31 kg [−0.32, −0.30]. The best system's
+median absolute error is 6.9 kg; 65% of predictions fall within 10 kg and 89% within 20 kg.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -275,6 +309,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
   previous meet already carries most of the signal.
 - **"Averaging LightGBM and the MLP will gain 0.1–0.3 kg."** It gained 0–0.09 kg; the two models' errors are highly correlated.
 - **"Squat/bench attempt details will help first-timers."** Only marginally (−0.06 kg); age-class fill and context helped more.
+- **"Predicting the deadlift-to-squat ratio will help."** It did not (+0.0 to +0.1 kg); the Huber loss on kg did help slightly (−0.1 kg).
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -337,11 +372,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 47 tests
+.venv/bin/pytest -q                                    # 51 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 5 LightGBM+MLP ensembles
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 7 LightGBM+MLP ensembles + 3 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```
