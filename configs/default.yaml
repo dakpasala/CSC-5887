@@ -81,6 +81,14 @@ quantile:
   levels: [0.1, 0.9]
   target_coverage: 0.8
 
+# Follow-up: LightGBM objective / target variants for the two best specialists.
+# Winner per feature set = lowest validation MAE (kg), base model included.
+objective_variants:
+  l1_kg: {objective: regression_l1}
+  huber_kg: {objective: huber, huber_delta: 10.0}
+  l2_ratio: {objective: regression, target: ratio}
+  l1_ratio: {objective: regression_l1, target: ratio}
+
 evaluation:
   bootstrap_reps: 200
   sparse_rows: 100

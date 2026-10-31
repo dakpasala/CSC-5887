@@ -118,7 +118,13 @@ class LightGBMModel(BaseModel):
     categoricals as integer codes declared categorical, code 0 = unknown.
     Small grid; each candidate uses validation early stopping on L1. With
     objective="quantile" (follow-up #6) the model predicts the `alpha` quantile;
-    early stopping and selection then use validation pinball loss."""
+    early stopping and selection then use validation pinball loss.
+
+    Objective follow-up: objective may be "regression_l1" or "huber"
+    (`huber_delta` in kg). With target="ratio" the model fits deadlift / squat
+    and predictions are multiplied back by squat. Rows are weighted by squat
+    (L1/Huber) or squat^2 (L2) so the loss stays the kg-scale loss; selection
+    always uses validation MAE in kg."""
 
     kind = "lightgbm"
 
@@ -131,7 +137,19 @@ class LightGBMModel(BaseModel):
         grid = p.get("fixed_grid") or p["grid"]
         quantile = p["objective"] == "quantile"
         extra = {"alpha": p["alpha"]} if quantile else {}
+        if p["objective"] == "huber":
+            extra = {"alpha": p.get("huber_delta", 10.0)}
         metric = "quantile" if quantile else "l1"
+        self.target = p.get("target", "kg")
+        s_tr, s_va = train["Best3SquatKg"].to_numpy(float), val["Best3SquatKg"].to_numpy(float)
+        if self.target == "ratio":
+            power = 2 if p["objective"] == "regression" else 1
+            fit_y, fit_yv = y_train / s_tr, y_val / s_va
+            w_tr, w_va = s_tr ** power, s_va ** power
+            if p["objective"] == "huber":
+                extra = {"alpha": p.get("huber_delta", 10.0) / float(np.median(s_tr))}  # delta on ratio scale
+        else:
+            fit_y, fit_yv, w_tr, w_va = y_train, y_val, None, None
         best = None
         for cand in grid:
             m = lgb.LGBMRegressor(
@@ -139,23 +157,29 @@ class LightGBMModel(BaseModel):
                 random_state=self.seed, n_jobs=os.cpu_count(), verbose=-1, **extra, **cand,
             )
             t0 = time.time()
-            m.fit(Xtr, y_train, eval_X=(Xva,), eval_y=(y_val,), eval_metric=metric,
+            m.fit(Xtr, fit_y, sample_weight=w_tr, eval_X=(Xva,), eval_y=(fit_yv,),
+                  eval_sample_weight=None if w_va is None else [w_va], eval_metric=metric,
                   callbacks=[lgb.early_stopping(p["early_stopping_rounds"], verbose=False)])
             pred = m.predict(Xva, num_iteration=m.best_iteration_)
+            if self.target == "ratio":
+                pred = pred * s_va
             score = pinball(y_val, pred, p["alpha"]) if quantile else mae(y_val, pred)
             self.tuning.append({**cand, "best_iteration": int(m.best_iteration_ or p["n_estimators"]),
                                 ("val_pinball" if quantile else "val_mae"): score, "seconds": time.time() - t0})
             if best is None or score < best[0]:
                 best = (score, cand, m)
         _, cand, self.model = best
-        self.selected = {"objective": p["objective"], **extra, "learning_rate": p["learning_rate"], **cand,
+        self.selected = {"objective": p["objective"], **extra, "target": self.target, "learning_rate": p["learning_rate"], **cand,
                          "best_iteration": int(self.model.best_iteration_ or p["n_estimators"]),
                          "categorical_representation": "integer codes as LightGBM categorical; 0 = unknown/infrequent/missing",
                          "early_stopping": f"validation {metric}, patience {p['early_stopping_rounds']}"}
         return self
 
     def predict(self, df):
-        return self.model.predict(self.prep.tree_frame(df), num_iteration=self.model.best_iteration_)
+        pred = self.model.predict(self.prep.tree_frame(df), num_iteration=self.model.best_iteration_)
+        if getattr(self, "target", "kg") == "ratio":
+            pred = pred * df["Best3SquatKg"].to_numpy(float)
+        return pred
 
 
 class MLPModel(BaseModel):

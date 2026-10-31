@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -47,6 +47,13 @@ class RunSpec:
         if self.model == "mlp":
             parts.append(f"s{self.seed}")
         return "__".join(parts)
+
+
+# (feature set, history_only, base run whose tree settings are reused)
+OBJECTIVE_TARGETS = [
+    ("X_all+anyhist", False, "expanded__A__X_all-anyhist__lightgbm"),
+    ("X_all+history_rich+anyhist", True, "expanded__A__X_all-history_rich-anyhist__lightgbm__histrows"),
+]
 
 
 def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
@@ -109,7 +116,12 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     runs.append(RunSpec("expanded", "B", "X_all+anyhist", "lightgbm"))
     runs.append(RunSpec("expanded", "B", "X_all+history_rich+anyhist", "lightgbm", history_only=True))
 
-    # 8. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 8. Follow-up: LightGBM objective / target variants for the best specialists.
+    for fs, hist, base in OBJECTIVE_TARGETS:
+        for name, ov in cfg.get("objective_variants", {}).items():
+            runs.append(RunSpec("objective", "A", fs, "lightgbm", history_only=hist, tune_from=base, variant=name, overrides=ov))
+
+    # 9. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

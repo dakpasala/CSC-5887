@@ -243,6 +243,21 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     bhx = rid("expanded", "B", "X_all+history_rich+anyhist", "lightgbm", hist=True)
     add(E.compare("expanded_chrono_history_eligible", [last_b, rb, bhx], T, row_filter=has_h, pairs=[(bhx, rb), (bhx, last_b)]))
 
+    # 10. follow-up: LightGBM objective / target variants and routed systems
+    from .ensemble import ROUTED
+    from .train import OBJECTIVE_TARGETS
+    for fs, hist, base in OBJECTIVE_TARGETS:
+        ids = [base] + [rid("objective", "A", fs, "lightgbm", hist=hist, variant=v) for v in cfg.get("objective_variants", {})]
+        old_ens = ("ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows" if hist else "ensemble__A__X_all-anyhist__lgbm_mlp")
+        new_ens = old_ens.replace("lgbm_mlp", "bestobj_mlp")
+        ids += [old_ens, new_ens]
+        add(E.compare(f"objective|{fs}", ids, T, row_filter=has_h if hist else None,
+                      pairs=[(i, base) for i in ids[1:-2]] + [(new_ens, old_ens)]))
+    routed = list(ROUTED)
+    add(E.compare("routed_all_lifters", routed, T, pairs=[(routed[1], routed[0]), (routed[2], routed[1]), (routed[2], routed[0])]))
+    add(E.compare("routed_first_timers", routed, T, row_filter=no_h, pairs=[(routed[2], routed[0])]))
+    add(E.compare("routed_returning", routed, T, row_filter=has_h, pairs=[(routed[2], routed[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

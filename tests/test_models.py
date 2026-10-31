@@ -96,3 +96,15 @@ def test_ensemble_weight_chosen_on_validation_only(cfg, tmp_path, monkeypatch):
     assert meta["selected"]["w_lightgbm"] == 1.0
     p = pd.read_parquet(runs / "E" / "predictions.parquet")
     np.testing.assert_allclose(p.loc[p.partition == "test", "yhat"], y_test + 50)
+
+
+@pytest.mark.parametrize("ov", [{"objective": "regression_l1"}, {"objective": "huber", "huber_delta": 10.0},
+                                {"objective": "regression", "target": "ratio"}, {"objective": "regression_l1", "target": "ratio"}])
+def test_lightgbm_objective_and_ratio_variants(ov, cfg, tmp_path):
+    df, y = _data()
+    m = build_model("lightgbm", "D_plus_equipment", cfg, 42, ov).fit(df[:400], y[:400], df[400:500], y[400:500])
+    p = m.predict(df[500:])
+    assert np.isfinite(p).all() and np.mean(np.abs(p - y[500:])) < 60  # predictions in kg, not ratios
+    m.save(tmp_path / "m.pkl")
+    np.testing.assert_allclose(BaseModel.load(tmp_path / "m.pkl").predict(df[500:]), p)
+    assert m.selected["target"] == ov.get("target", "kg")
