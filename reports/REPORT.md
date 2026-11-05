@@ -311,6 +311,44 @@ blend weights chosen on validation.
 - **Best system now:** 9.64 kg for all lifters, 13.03 kg for first-timers, 8.15 kg for returning lifters. The
   median absolute error is 6.8 kg; 65% of predictions fall within 10 kg and 89% within 20 kg.
 
+#### Follow-up: GRU over earlier meets (post-hoc, returning lifters)
+
+A GRU (hidden size 64) reads the lifter's last 8 deadlift meets of any event, from strictly earlier dates,
+oldest first. Each step carries:
+
+- deadlift, plus squat and bench when the meet reported them;
+- event type and whether the equipment matches the current meet;
+- log time before the current meet;
+- previous-attempt ratio.
+
+All scalings are fixed constants, so nothing is fitted on the sequence data. The GRU's final state is concatenated
+with the current meet's static features and passed to a [128, 64] head with L1 loss, Adam, and validation early
+stopping. Tests check that sequences match a brute-force recomputation and never include same-day, future, or
+other-lifter meets. There are two variants:
+
+- **hybrid:** the static input also contains every hand-built history summary;
+- **sequence-only:** the static input has same-meet features only, so the GRU must learn history itself.
+
+| 268,289 returning-lifter test rows (64,764 lifters) | MAE | Paired Δ |
+|---|---|---|
+| Repeat last deadlift | 13.44 | — |
+| Huber LightGBM, all hand-built history | 8.21 | — |
+| Embedding MLP, all hand-built history | 8.26 | — |
+| GRU hybrid | 8.25 | −0.014 [−0.027, −0.001] vs embedding MLP |
+| **GRU sequence-only** (no hand-built history features) | **8.23** | +0.027 [0.015, 0.042] vs LightGBM |
+| Previous best blend (LightGBM + embedding MLP) | 8.15 | — |
+| **Blend + GRU** (w = 0.75 / 0.25, chosen on validation) | **8.12** | −0.027 [−0.031, −0.024] |
+
+- **The GRU learns history on its own.** From raw meet sequences, with no summary features, it comes within
+  0.03 kg of the best tree model built on about 25 engineered history features. It beats the embedding MLP that
+  has those features.
+- **Hand-built summaries add nothing for the GRU.** The hybrid is not better than the sequence-only model, so the
+  engineered features and the learned sequence representation carry the same information.
+- **Blending gains a little.** The GRU's errors differ slightly from the trees', so adding it to the blend gains
+  0.03 kg. The best routed system is now **9.62 kg** for all lifters (Δ −0.019 [−0.021, −0.017]) and **8.12 kg**
+  for returning lifters. First-timers stay at 13.03 kg because they have no sequence.
+- **Training cost:** 81–85k parameters, about 15 s per epoch on CPU, 13–20 epochs.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -367,6 +405,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Squat/bench attempt details will help first-timers."** Only marginally (−0.06 kg); age-class fill and context helped more.
 - **"Predicting the deadlift-to-squat ratio will help."** It did not (+0.0 to +0.1 kg); the Huber loss on kg did help slightly (−0.1 kg).
 - **"Previous meets' deadlift attempts will cut error by 0.1–0.3 kg."** They cut it by 0.02 kg overall (0.05–0.07 kg per single model).
+- **"A sequence model will find signal the summary features miss."** It did not beat them, but a GRU on raw meet sequences matched them (8.23 vs 8.21 kg) without any hand-built history features.
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -430,11 +469,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 54 tests
+.venv/bin/pytest -q                                    # 57 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 11 ensembles + 5 routed systems
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 12 ensembles + 6 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```
