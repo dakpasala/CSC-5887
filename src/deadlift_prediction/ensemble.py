@@ -135,7 +135,18 @@ ROUTED = {
                                          "ensemble__A__X_all-history_rich-anyhist__bestobj_mlp__histrows"),
     "routed__A__embed_specialists": ("ensemble__A__X_all-anyhist__bestobj_embed",
                                      "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows"),
+    "routed__A__dlatt_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed",
+                                     "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"),
 }
+
+# Fixed (LightGBM, embedding MLP, blend) triples for the past-deadlift-attempt follow-up.
+DLATT_BLENDS = [
+    ("dlatt__A__X_all-anyhist-dlatt__lightgbm", "dlatt__A__X_all-anyhist-dlatt__embed_mlp__s42",
+     "ensemble__A__X_all-anyhist-dlatt__huber_embed"),
+    ("dlatt__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows",
+     "dlatt__A__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__s42",
+     "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"),
+]
 
 
 def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
@@ -154,6 +165,8 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
                 ("dl_arch__A__X_all-history_rich-anyhist__embed_mlp__histrows__s42",
                  "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows")]}
     jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
+    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS
+             if (root / lgbm_id / "done.json").exists()]
     for fs, lgbm_id, mlp_id, run_id in jobs:
         if not (root / mlp_id / "done.json").exists():
             continue

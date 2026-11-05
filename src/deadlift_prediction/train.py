@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -53,6 +53,12 @@ class RunSpec:
 OBJECTIVE_TARGETS = [
     ("X_all+anyhist", False, "expanded__A__X_all-anyhist__lightgbm"),
     ("X_all+history_rich+anyhist", True, "expanded__A__X_all-history_rich-anyhist__lightgbm__histrows"),
+]
+
+
+DLATT_TARGETS = [
+    ("X_all+anyhist+dlatt", False, "expanded__A__X_all-anyhist__lightgbm"),
+    ("X_all+history_rich+anyhist+dlatt", True, "expanded__A__X_all-history_rich-anyhist__lightgbm__histrows"),
 ]
 
 
@@ -125,7 +131,13 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     for fs, hist in [("X_all+anyhist", False), ("X_all+history_rich+anyhist", True)]:
         runs.append(RunSpec("dl_arch", "A", fs, "embed_mlp", seed=seeds[0], history_only=hist))
 
-    # 10. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 10. Follow-up: previous deadlift meet's attempts and progression rate.
+    for fs, hist, base in DLATT_TARGETS:
+        runs.append(RunSpec("dlatt", "A", fs, "lightgbm", history_only=hist, tune_from=base,
+                            overrides={"objective": "huber", "huber_delta": 10.0}))
+        runs.append(RunSpec("dlatt", "A", fs, "embed_mlp", seed=seeds[0], history_only=hist))
+
+    # 11. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

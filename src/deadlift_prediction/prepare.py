@@ -29,7 +29,7 @@ def prepare(cfg: dict) -> dict:
 
     if cfg.get("synthetic"):
         raw = synthetic.make_raw(seed=cfg["seed"])
-        aux_raw = raw[["Name", "Event", "Equipment", "Date", "Best3DeadliftKg"]].copy()
+        aux_raw = raw[["Name", "Event", "Equipment", "Date", "Best3DeadliftKg", "Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg"]].copy()
         meta = {"source_url": "SYNTHETIC FIXTURE (not OpenPowerlifting)", "sha256": "synthetic", "raw_rows": len(raw),
                 "event_counts": raw["Event"].value_counts().to_dict(), "archive": None}
     else:

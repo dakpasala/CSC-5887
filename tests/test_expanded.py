@@ -83,3 +83,51 @@ def test_any_event_history_is_order_independent():
             last = past[past.Date == past.Date.max()]
             assert r.prev_any_deadlift == pytest.approx(last.Best3DeadliftKg.max())
             assert r.best_prev_any_deadlift == pytest.approx(past.Best3DeadliftKg.max())
+
+
+def test_past_deadlift_attempts_only_from_strictly_earlier_meets():
+    from deadlift_prediction.features import DLATT_FEATURES
+
+    target = pd.DataFrame({"lifter_key": ["a", "a"], "row_id": ["t1", "t2"],
+                           "Date": pd.to_datetime(["2020-06-01", "2021-06-01"])})
+    aux = pd.DataFrame({
+        "lifter_key": ["a", "a", "a", "a"],
+        "Event": ["SBD", "SBD", "SBD", "SBD"],
+        "Date": pd.to_datetime(["2019-01-01", "2020-01-01", "2020-06-01", "2021-06-01"]),
+        "Best3DeadliftKg": [200.0, 240.0, 245.0, 260.0],
+        "Deadlift1Kg": [180.0, 220.0, 230.0, 240.0],
+        "Deadlift2Kg": [200.0, 240.0, 245.0, 260.0],
+        "Deadlift3Kg": [-210.0, -250.0, -999.0, -999.0],  # same-day / current misses must never appear
+    })
+    h = add_any_history(target, aux).set_index("row_id")
+    t1 = h.loc["t1"]  # previous deadlift meet = 2020-01-01
+    assert t1["prev_dl_max_attempted"] == 250.0
+    assert t1["prev_dl_attempt_ratio"] == pytest.approx(250 / 240)
+    assert t1["prev_dl_opener_ratio"] == pytest.approx(220 / 240)
+    assert t1["prev_dl_n_good"] == 2
+    assert t1["best_prev_dl_attempted"] == 250.0
+    assert t1["dl_progress_per_year"] == pytest.approx(40 / ((pd.Timestamp("2020-01-01") - pd.Timestamp("2019-01-01")).days / 365.25))
+    t2 = h.loc["t2"]  # previous = 2020-06-01 (its 999 miss is in the past for t2, so it is allowed here)
+    assert t2["prev_dl_max_attempted"] == 999.0 and t2["best_prev_dl_attempted"] == 999.0
+    assert not (h.loc[["t1"], DLATT_FEATURES] == 999.0).any().any()  # same-day attempts never leak into t1
+    assert not (h[DLATT_FEATURES] == 260.0).any().any()  # the 2021-06-01 (current) deadlift never appears
+
+
+def test_unreported_attempts_are_missing_and_short_gaps_give_no_slope():
+    target = pd.DataFrame({"lifter_key": ["a"], "row_id": ["t"], "Date": pd.to_datetime(["2020-12-01"])})
+    aux = pd.DataFrame({"lifter_key": ["a", "a"], "Event": ["D", "D"],
+                        "Date": pd.to_datetime(["2020-01-01", "2020-01-20"]),  # 19 days apart -> no slope
+                        "Best3DeadliftKg": [200.0, 205.0],
+                        "Deadlift1Kg": [np.nan, np.nan], "Deadlift2Kg": [np.nan, np.nan], "Deadlift3Kg": [np.nan, np.nan]})
+    r = add_any_history(target, aux).iloc[0]
+    assert np.isnan(r["prev_dl_max_attempted"]) and np.isnan(r["prev_dl_n_good"]) and np.isnan(r["dl_progress_per_year"])
+    assert r["best_prev_dl_attempted"] == 205.0  # falls back to made lifts
+
+
+def test_clean_table_never_carries_current_deadlift_attempts(cfg):
+    from conftest import raw_rows
+    from deadlift_prediction.data import CLEAN_COLUMNS, clean
+
+    df, _, _ = clean(raw_rows([{"Name": "a", "Deadlift1Kg": "240", "Deadlift3Kg": "-260"}]), cfg)
+    assert not [c for c in df.columns if c.startswith("Deadlift")]
+    assert not [c for c in CLEAN_COLUMNS if c.startswith("Deadlift")]

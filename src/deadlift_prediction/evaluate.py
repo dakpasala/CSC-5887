@@ -271,6 +271,22 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_embed_all_lifters", ["routed__A__objective_specialists", "routed__A__embed_specialists"], T,
                   pairs=[("routed__A__embed_specialists", "routed__A__objective_specialists")]))
 
+    # 12. follow-up: previous deadlift meet's attempts + progression rate
+    from .ensemble import DLATT_BLENDS
+    prev_best = {False: "ensemble__A__X_all-anyhist__bestobj_embed", True: "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows"}
+    prev_l = {False: "objective__A__X_all-anyhist__lightgbm__huber_kg",
+              True: "objective__A__X_all-history_rich-anyhist__lightgbm__histrows__huber_kg"}
+    prev_e = {False: "dl_arch__A__X_all-anyhist__embed_mlp__s42", True: "dl_arch__A__X_all-history_rich-anyhist__embed_mlp__histrows__s42"}
+    for lgbm_id, emb_id, ens_id in DLATT_BLENDS:
+        hist = "histrows" in ens_id
+        add(E.compare(f"dlatt|{'returning' if hist else 'all_rows'}", [prev_l[hist], prev_e[hist], prev_best[hist], lgbm_id, emb_id, ens_id], T,
+                      row_filter=has_h if hist else None,
+                      pairs=[(lgbm_id, prev_l[hist]), (emb_id, prev_e[hist]), (ens_id, prev_best[hist])]))
+    rr = ["routed__A__embed_specialists", "routed__A__dlatt_specialists"]
+    add(E.compare("routed_dlatt_all_lifters", rr, T, pairs=[(rr[1], rr[0])]))
+    add(E.compare("routed_dlatt_first_timers", rr, T, row_filter=no_h, pairs=[(rr[1], rr[0])]))
+    add(E.compare("routed_dlatt_returning", rr, T, row_filter=has_h, pairs=[(rr[1], rr[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

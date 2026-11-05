@@ -30,9 +30,13 @@ CONTEXT_NUMERIC = ["age_filled", "age_from_class", "meet_year"]
 CONTEXT_CATEGORICAL = ["Tested", "Country", "ParentFederation"]
 ANYHIST_FEATURES = ["prev_any_deadlift", "best_prev_any_deadlift", "n_prev_any_deadlift_meets",
                     "days_since_prev_any_deadlift", "prev_any_was_sbd"]
+# Past deadlift attempts: from the previous deadlift meet only (strictly earlier
+# date). The current meet's deadlift attempts are never inputs.
+DLATT_FEATURES = ["prev_dl_max_attempted", "prev_dl_attempt_ratio", "prev_dl_opener_ratio", "prev_dl_n_good",
+                  "best_prev_dl_attempted", "dl_progress_per_year"]
 NUMERIC_SAME_MEET = NUMERIC_SAME_MEET | set(ATTEMPT_FEATURES) | set(CONTEXT_NUMERIC)
 CATEGORICAL_SAME_MEET = CATEGORICAL_SAME_MEET | set(CONTEXT_CATEGORICAL)
-HISTORY_FEATURES = HISTORY_FEATURES | set(ANYHIST_FEATURES)
+HISTORY_FEATURES = HISTORY_FEATURES | set(ANYHIST_FEATURES) | set(DLATT_FEATURES)
 ALLOWED_INPUTS = NUMERIC_SAME_MEET | CATEGORICAL_SAME_MEET | HISTORY_FEATURES
 
 FORBIDDEN = {
@@ -65,7 +69,8 @@ CORE_ABLATION = ["A_squat", "B_squat_bench", "C_plus_demographics", "D_plus_equi
 def feature_spec(name: str) -> dict[str, list[str]]:
     """Resolve a feature-set name. Suffixes (combinable, joined by `+`):
     `history` (previous meet), `history_rich` (previous meet + career summaries),
-    `anyhist` (deadlift history from earlier meets of any event type)."""
+    `anyhist` (deadlift history from earlier meets of any event type),
+    `dlatt` (previous deadlift meet's attempts and progression rate)."""
     base, *extras = name.split("+")
     spec = {k: list(v) for k, v in FEATURE_SETS[base].items()}
     for extra in extras:
@@ -75,6 +80,8 @@ def feature_spec(name: str) -> dict[str, list[str]]:
             spec["numeric"] += HISTORY_NUMERIC + HISTORY_RICH
         elif extra == "anyhist":
             spec["numeric"] += ANYHIST_FEATURES
+        elif extra == "dlatt":
+            spec["numeric"] += DLATT_FEATURES
         else:
             raise KeyError(name)
     spec = {"numeric": list(dict.fromkeys(spec["numeric"])), "categorical": spec["categorical"]}
@@ -292,24 +299,50 @@ def add_any_history(df: pd.DataFrame, aux: pd.DataFrame) -> pd.DataFrame:
     represents that day. For each target row, the latest representative with a
     date strictly before the target date supplies the features; same-day
     entries are never used. Missing when no earlier deadlift exists.
+
+    Past-attempt features (DLATT_FEATURES) describe that same previous
+    representative row: heaviest attempted deadlift (misses included), its
+    ratio to the made best, opener ratio, good attempts, the career-max
+    attempted weight, and the change in best deadlift per year between that
+    meet and the one before it (requires >= 60 days between them).
     """
     rep = aux.sort_values(["lifter_key", "Date", "Best3DeadliftKg"], ascending=[True, True, False], kind="mergesort")
     rep = rep.drop_duplicates(["lifter_key", "Date"], keep="first").reset_index(drop=True)
     g = rep.groupby("lifter_key", sort=False)
+    att_cols = [c for c in ["Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg"] if c in rep.columns]
+    if att_cols:
+        att = rep[att_cols].astype("float64")
+        reported = att.notna().any(axis=1)
+        # Negative attempts are misses (OPL convention): attempted weight = |value|.
+        max_att = np.fmax(att.abs().max(axis=1), rep["Best3DeadliftKg"]).where(reported)
+        n_good = (att > 0).sum(axis=1).astype("float64").where(reported)
+        opener = att[att_cols[0]].abs() / rep["Best3DeadliftKg"]
+    else:
+        max_att = n_good = opener = pd.Series(np.nan, index=rep.index)
+    best_att = np.fmax(max_att, rep["Best3DeadliftKg"])  # career max uses the made lift when attempts are unreported
+    prev_dl, prev_date = g["Best3DeadliftKg"].shift(1), g["Date"].shift(1)
+    gap_years = (rep["Date"] - prev_date).dt.days / 365.25
+    progress = ((rep["Best3DeadliftKg"] - prev_dl) / gap_years).where(gap_years >= 60 / 365.25)
     rep = pd.DataFrame({
         "lifter_key": rep["lifter_key"], "_aux_date": rep["Date"],
         "prev_any_deadlift": rep["Best3DeadliftKg"],
         "best_prev_any_deadlift": g["Best3DeadliftKg"].cummax(),
         "n_prev_any_deadlift_meets": (g.cumcount() + 1).astype("float64"),
         "prev_any_was_sbd": (rep["Event"] == "SBD").astype("float64"),
+        "prev_dl_max_attempted": max_att,
+        "prev_dl_attempt_ratio": max_att / rep["Best3DeadliftKg"],
+        "prev_dl_opener_ratio": opener,
+        "prev_dl_n_good": n_good,
+        "best_prev_dl_attempted": best_att.groupby(rep["lifter_key"], sort=False).cummax(),
+        "dl_progress_per_year": progress,
     }).sort_values("_aux_date", kind="mergesort")
-    out = df.drop(columns=[c for c in [*ANYHIST_FEATURES, "_aux_date"] if c in df.columns])
+    out = df.drop(columns=[c for c in [*ANYHIST_FEATURES, *DLATT_FEATURES, "_aux_date"] if c in df.columns])
     order = out["Date"].argsort(kind="mergesort")
     tgt = out.iloc[order][["lifter_key", "Date"]].reset_index()
     m = pd.merge_asof(tgt, rep, left_on="Date", right_on="_aux_date", by="lifter_key",
                       allow_exact_matches=False, direction="backward")
     m = m.set_index("index").reindex(out.index)
-    for c in ["prev_any_deadlift", "best_prev_any_deadlift", "n_prev_any_deadlift_meets", "prev_any_was_sbd"]:
+    for c in ["prev_any_deadlift", "best_prev_any_deadlift", "n_prev_any_deadlift_meets", "prev_any_was_sbd", *DLATT_FEATURES]:
         out[c] = m[c].to_numpy()
     out["days_since_prev_any_deadlift"] = (out["Date"] - m["_aux_date"]).dt.days.astype("float64").to_numpy()
     has = out["prev_any_deadlift"].notna()

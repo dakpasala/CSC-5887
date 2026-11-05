@@ -41,7 +41,10 @@ CLEAN_COLUMNS = [
     "Best3SquatKg", "Best3BenchKg", "Best3DeadliftKg", "Federation", "ParentFederation",
     "Tested", "MeetCountry", "Date", *EXTRA_COLUMNS,
 ]
-AUX_COLUMNS = ["Name", "Event", "Equipment", "Date", "Best3DeadliftKg"]
+# Deadlift attempts are kept ONLY in this history table: they are used as
+# features solely for strictly earlier meets (see features.add_any_history).
+AUX_ATTEMPTS = ["Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg"]
+AUX_COLUMNS = ["Name", "Event", "Equipment", "Date", "Best3DeadliftKg", *AUX_ATTEMPTS]
 
 
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
@@ -319,6 +322,8 @@ def clean_aux(aux: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
     """
     a = aux.copy()
     n0 = len(a)
+    for c in AUX_ATTEMPTS:
+        a[c] = _to_float(a[c]) if c in a else np.nan
     a["Best3DeadliftKg"] = _to_float(a["Best3DeadliftKg"])
     a["Date"] = pd.to_datetime(a["Date"], format="%Y-%m-%d", errors="coerce")
     a = a[np.isfinite(a["Best3DeadliftKg"]) & (a["Best3DeadliftKg"] > 0) & a["Date"].notna() & a["Name"].notna()]
@@ -330,4 +335,5 @@ def clean_aux(aux: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
         a = a[hash_unit(a["lifter_key"], f"sample{cfg['seed']}") < frac]
     info = {"raw_rows": int(n0), "valid_deadlift_rows": int(n1), "after_dedup_and_sampling": int(len(a)),
             "by_event": {str(k): int(v) for k, v in a["Event"].value_counts().items()}}
-    return a[["lifter_key", "Event", "Equipment", "Date", "Best3DeadliftKg"]].reset_index(drop=True), info
+    info["deadlift_attempts_reported_share"] = float(a[AUX_ATTEMPTS].notna().any(axis=1).mean()) if len(a) else 0.0
+    return a[["lifter_key", "Event", "Equipment", "Date", "Best3DeadliftKg", *AUX_ATTEMPTS]].reset_index(drop=True), info
