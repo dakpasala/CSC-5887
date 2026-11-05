@@ -22,10 +22,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--existing", type=Path, help="register an already-downloaded zip instead of fetching")
     add("prepare", "clean, audit, compute history, freeze splits")
     p = add("train", "fit all planned runs (skips finished runs)")
-    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile", "expanded", "objective", "dl_arch", "dlatt", "seq"])
+    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile", "expanded", "objective", "dl_arch", "dlatt", "seq", "tuned"])
     p.add_argument("--only", help="substring filter on run IDs")
     p.add_argument("--force", action="store_true")
     add("ensemble", "build LightGBM+MLP ensembles from finished runs (weight chosen on validation)")
+    p = add("hpo", "bounded random hyperparameter search on validation (resumable)")
+    p.add_argument("--only", action="append", help="target name(s), e.g. lgbm_all")
     for name in ("evaluate", "summarize"):
         p = add(name, f"{name} saved predictions")
         p.add_argument("--final", action="store_true", help="score TEST partitions (only after configs are frozen)")
@@ -51,6 +53,9 @@ def main(argv: list[str] | None = None) -> None:
         build_ensembles(cfg)
         df, _ = load_prepared(cfg)
         build_objective_ensembles(cfg, df.set_index("row_id")["has_history"])
+    elif args.cmd == "hpo":
+        from .hpo import run_search
+        run_search(cfg, only=args.only)
     elif args.cmd == "evaluate":
         from .evaluate import evaluate
         evaluate(cfg, final=args.final)
@@ -73,6 +78,11 @@ def smoke(config: str | Path | None = None) -> dict:
     from .config import artifacts_dir
     shutil.rmtree(artifacts_dir(cfg) / "runs", ignore_errors=True)  # synthetic runs only; start clean
     summary = prepare(cfg)
+    import shutil as _sh
+
+    _sh.rmtree(artifacts_dir(cfg) / "hpo", ignore_errors=True)
+    from .hpo import run_search
+    run_search(cfg)  # tiny synthetic search so the "tuned" refits are exercised
     metas = train(cfg, force=True)
     from .ensemble import build_ensembles, build_objective_ensembles
     from .prepare import load_prepared

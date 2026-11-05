@@ -31,6 +31,10 @@ models:
     max_epochs: 2
     patience: 1
     batch_size: 256
+hpo:
+  seed: 0
+  train_fraction: 1.0
+  trials: {lightgbm: 2, embed_mlp: 1, gru: 1}
 evaluation:
   bootstrap_reps: 20
   sparse_rows: 20

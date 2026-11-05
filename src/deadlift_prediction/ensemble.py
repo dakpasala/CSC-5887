@@ -138,7 +138,17 @@ ROUTED = {
     "routed__A__dlatt_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed",
                                      "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"),
     "routed__A__gru_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed", "ensemble__A__seq_gru_blend__histrows"),
+    "routed__A__tuned_specialists": ("ensemble__A__tuned_all", "ensemble__A__tuned_ret__histrows"),
 }
+
+# Hyperparameter-search follow-up: blends of the refit tuned models (weights chosen on validation).
+TUNED_BLENDS = [
+    ("tuned__A__X_all-anyhist-dlatt__lightgbm__hpo", "tuned__A__X_all-anyhist-dlatt__embed_mlp__hpo__s42",
+     "ensemble__A__tuned_all"),
+    ("tuned__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo",
+     "tuned__A__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__hpo__s42", "ensemble__A__tuned_ret_le__histrows"),
+    ("ensemble__A__tuned_ret_le__histrows", "tuned__A__X_all__gru__histrows__hpo__s42", "ensemble__A__tuned_ret__histrows"),
+]
 
 # GRU follow-up: current best returning-lifter blend + hybrid GRU (weight chosen on validation).
 SEQ_BLENDS = [
@@ -174,7 +184,7 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
     # Later blends may consume earlier ones (SEQ_BLENDS uses a DLATT blend), so
     # existence is checked inside the loop, in order.
-    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS]
+    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS]
     for fs, lgbm_id, mlp_id, run_id in jobs:
         if not ((root / lgbm_id / "done.json").exists() and (root / mlp_id / "done.json").exists()):
             continue

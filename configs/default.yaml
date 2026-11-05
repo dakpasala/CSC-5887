@@ -113,6 +113,14 @@ objective_variants:
   l2_ratio: {objective: regression, target: ratio}
   l1_ratio: {objective: regression_l1, target: ratio}
 
+# Follow-up: bounded random hyperparameter search (validation only). Trials train
+# on a fixed sample of training lifters; the best setting per target is refit on
+# the full training partition ("tuned" runs).
+hpo:
+  seed: 0
+  train_fraction: 0.3
+  trials: {lightgbm: 16, embed_mlp: 8, gru: 6}
+
 evaluation:
   bootstrap_reps: 200
   sparse_rows: 100

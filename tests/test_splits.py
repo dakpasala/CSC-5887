@@ -66,3 +66,21 @@ def test_transfer_selection_uses_counts_only():
     eq = [x["value"] for x in g if x["field"] == "Equipment"]
     assert "Raw" not in eq and set(eq) == {"Wraps", "Single-ply"}
     assert len([x for x in g if x["field"] == "Federation"]) == 2
+
+
+def test_hpo_sample_is_by_lifter_and_only_training_rows_fit(cfg):
+    from deadlift_prediction.data import hash_unit
+    from deadlift_prediction.hpo import SPACES, sample, to_overrides
+
+    df = _df()
+    a = group_split(df, {"train": 0.7, "val": 0.15, "test": 0.15}, 42)
+    keep = hash_unit(df["lifter_key"], "hpo42") < 0.3
+    fit_rows = (a == "train").to_numpy() & keep
+    per = df[fit_rows].groupby("lifter_key").size()
+    assert (per == df.groupby("lifter_key").size().loc[per.index]).all()  # whole lifters, never partial
+    assert set(df.loc[fit_rows, "lifter_key"]).isdisjoint(set(df.loc[a != "train", "lifter_key"]))
+    rng = np.random.default_rng(0)
+    p = sample("lightgbm", rng)
+    assert set(p) == set(SPACES["lightgbm"])
+    ov = to_overrides("lightgbm", p)
+    assert ov["objective"] == "huber" and len(ov["fixed_grid"]) == 1

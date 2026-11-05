@@ -299,6 +299,25 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     rg = ["routed__A__dlatt_specialists", "routed__A__gru_specialists"]
     add(E.compare("routed_gru_all_lifters", rg, T, pairs=[(rg[1], rg[0])]))
 
+    # 14. follow-up: hyperparameter search (refit tuned models vs their untuned counterparts)
+    tuned_pairs = [
+        ("tuned__A__X_all-anyhist-dlatt__lightgbm__hpo", "dlatt__A__X_all-anyhist-dlatt__lightgbm", False),
+        ("tuned__A__X_all-anyhist-dlatt__embed_mlp__hpo__s42", "dlatt__A__X_all-anyhist-dlatt__embed_mlp__s42", False),
+        ("tuned__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo", d_l, True),
+        ("tuned__A__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__hpo__s42", d_e, True),
+        ("tuned__A__X_all__gru__histrows__hpo__s42", g_p, True),
+        ("ensemble__A__tuned_all", "ensemble__A__X_all-anyhist-dlatt__huber_embed", False),
+        ("ensemble__A__tuned_ret__histrows", s_b, True),
+    ]
+    for hist in (False, True):
+        ps = [(a, b) for a, b, h in tuned_pairs if h == hist]
+        ids = list(dict.fromkeys([x for p in ps for x in p]))
+        add(E.compare(f"tuned|{'returning' if hist else 'all_rows'}", ids, T, row_filter=has_h if hist else None, pairs=ps))
+    rt = ["routed__A__gru_specialists", "routed__A__tuned_specialists"]
+    add(E.compare("routed_tuned_all_lifters", rt, T, pairs=[(rt[1], rt[0])]))
+    add(E.compare("routed_tuned_first_timers", rt, T, row_filter=no_h, pairs=[(rt[1], rt[0])]))
+    add(E.compare("routed_tuned_returning", rt, T, row_filter=has_h, pairs=[(rt[1], rt[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

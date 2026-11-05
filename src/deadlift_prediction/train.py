@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -141,7 +141,14 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     for fs in ["X_all+history_rich+anyhist+dlatt", "X_all"]:  # hybrid (with summaries) and sequence-only history
         runs.append(RunSpec("seq", "A", fs, "gru", seed=seeds[0], history_only=True))
 
-    # 12. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 12. Follow-up: refit the best hyperparameter-search settings on the full training partition.
+    from .hpo import TARGETS, best_overrides
+    for name, (kind, fs, hist) in TARGETS.items():
+        ov = best_overrides(cfg, name)
+        if ov is not None:
+            runs.append(RunSpec("tuned", "A", fs, kind, seed=seeds[0], history_only=hist, variant="hpo", overrides=ov))
+
+    # 13. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,
