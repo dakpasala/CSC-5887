@@ -266,7 +266,154 @@ class MLPModel(BaseModel):
         return self._forward(self.net, torch.from_numpy(self.prep.dense(df)))
 
 
-MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel]}
+class EmbedMLPModel(BaseModel):
+    """MLP with learned per-feature embeddings (deep-learning architecture follow-up).
+
+    Numeric features (training-median imputed, standardized with training
+    statistics) each get a periodic "PLR" embedding (Gorishniy et al., 2022):
+    v = [sin(2*pi*c*x), cos(2*pi*c*x)] with k learnable frequencies c per feature
+    (initialised N(0, frequency_scale)), then a per-feature Linear(2k -> d) + ReLU.
+    Missing-value indicators are appended as plain inputs. Each categorical gets
+    an nn.Embedding (code 0 = unknown/infrequent/missing). The concatenation feeds
+    an MLP with ReLU and dropout. Training matches MLPModel: standardized target,
+    L1 loss, Adam, early stopping on validation MAE (kg), best epoch restored."""
+
+    kind = "embed_mlp"
+
+    def _inputs(self, df):
+        import torch
+
+        num = self.prep.numeric_raw(df)
+        mu = np.array([self.prep.means[c] for c in self.prep.numeric])
+        sd = np.array([self.prep.stds[c] for c in self.prep.numeric])
+        num = ((num - mu) / sd).astype("float32")
+        ind = self.prep.indicators(df).astype("float32")
+        codes = self.prep.codes(df).astype("int64")
+        return torch.from_numpy(num), torch.from_numpy(ind), torch.from_numpy(codes)
+
+    def _build(self):
+        import torch
+        from torch import nn
+
+        p = self.params
+        n_num, n_ind = len(self.prep.numeric), len(self.prep.indicator_cols)
+        k, d, d_cat = p["n_frequencies"], p["d_embedding"], p["d_cat"]
+        vocab = [len(self.prep.vocab[c]) + 1 for c in self.prep.categorical]
+
+        class Net(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.freq = nn.Parameter(torch.randn(n_num, k) * p["frequency_scale"])
+                self.w = nn.Parameter(torch.randn(n_num, 2 * k, d) / np.sqrt(2 * k))
+                self.b = nn.Parameter(torch.zeros(n_num, d))
+                self.cats = nn.ModuleList([nn.Embedding(v, d_cat) for v in vocab])
+                width = n_num * d + n_ind + len(vocab) * d_cat
+                layers = []
+                for h in p["hidden"]:
+                    layers += [nn.Linear(width, h), nn.ReLU()]
+                    if p.get("dropout"):
+                        layers.append(nn.Dropout(p["dropout"]))
+                    width = h
+                layers.append(nn.Linear(width, 1))
+                self.mlp = nn.Sequential(*layers)
+
+            def forward(self, num, ind, codes):
+                z = 2 * np.pi * num.unsqueeze(-1) * self.freq          # (B, F, k)
+                z = torch.cat([torch.sin(z), torch.cos(z)], dim=-1)     # (B, F, 2k)
+                e = torch.relu(torch.einsum("bfk,fkd->bfd", z, self.w) + self.b)
+                parts = [e.flatten(1), ind] + [emb(codes[:, j]) for j, emb in enumerate(self.cats)]
+                return self.mlp(torch.cat(parts, dim=1)).squeeze(1)
+
+        return Net()
+
+    def fit(self, train, y_train, val, y_val):
+        import torch
+        from torch import nn
+
+        p = self.params
+        torch.manual_seed(self.seed)
+        np.random.seed(self.seed)
+        self._prep(train)
+        device = p.get("device", "auto")
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
+        tr = self._inputs(train)
+        va = tuple(t.to(device) for t in self._inputs(val))
+        self.y_mean, self.y_std = float(y_train.mean()), float(y_train.std() or 1.0)
+        ytr = torch.from_numpy(((y_train - self.y_mean) / self.y_std).astype("float32"))
+        net = self._build().to(device)
+        opt = torch.optim.Adam(net.parameters(), lr=p["lr"])
+        loss_fn = nn.L1Loss() if p.get("loss", "l1") == "l1" else nn.MSELoss()
+        gen = torch.Generator().manual_seed(self.seed)
+        best, bad = (np.inf, None, -1), 0
+        for epoch in range(p["max_epochs"]):
+            net.train()
+            t0 = time.time()
+            perm = torch.randperm(len(ytr), generator=gen)
+            total = 0.0
+            for i in range(0, len(perm), p["batch_size"]):
+                idx = perm[i:i + p["batch_size"]]
+                opt.zero_grad()
+                loss = loss_fn(net(*(t[idx].to(device) for t in tr)), ytr[idx].to(device))
+                loss.backward()
+                opt.step()
+                total += loss.item() * len(idx)
+            score = mae(y_val, self._forward(net, va))
+            self.tuning.append({"epoch": epoch, "train_loss": total / len(perm), "val_mae": score, "seconds": time.time() - t0})
+            if score < best[0] - 1e-6:
+                best, bad = (score, copy.deepcopy(net.state_dict()), epoch), 0
+            else:
+                bad += 1
+                if bad >= p["patience"]:
+                    break
+        net.load_state_dict(best[1])
+        self.net = net.cpu().eval()
+        n_params = sum(t.numel() for t in self.net.parameters())
+        self.selected = {k: p[k] for k in ["hidden", "dropout", "lr", "batch_size", "loss", "n_frequencies",
+                                           "frequency_scale", "d_embedding", "d_cat"]}
+        self.selected.update({"best_epoch": best[2], "epochs_run": len(self.tuning), "parameters": int(n_params),
+                              "target_scaling": "standardized with training mean/std", "device": device,
+                              "numeric_embedding": "periodic PLR (Gorishniy et al. 2022)"})
+        return self
+
+    def _forward(self, net, inputs):
+        import torch
+
+        net.eval()
+        n = len(inputs[0])
+        out = []
+        with torch.no_grad():
+            for i in range(0, n, 65536):
+                out.append(net(*(t[i:i + 65536] for t in inputs)).cpu().numpy())
+        return np.concatenate(out).astype("float64") * self.y_std + self.y_mean
+
+    def predict(self, df):
+        return self._forward(self.net, self._inputs(df))
+
+    # The network class is built inside _build (torch is imported lazily so the
+    # LightGBM process never loads it), so pickling stores weights as arrays and
+    # rebuilds the network on load.
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        net = state.pop("net", None)
+        if net is not None:
+            state["_weights"] = {k: v.detach().cpu().numpy() for k, v in net.state_dict().items()}
+        return state
+
+    def __setstate__(self, state):
+        weights = state.pop("_weights", None)
+        self.__dict__.update(state)
+        if weights is not None:
+            import torch
+
+            net = self._build()
+            net.load_state_dict({k: torch.from_numpy(v) for k, v in weights.items()})
+            self.net = net.eval()
+
+
+MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel]}
+TORCH_MODELS = {"mlp", "embed_mlp"}
 
 
 def build_model(kind: str, feature_set: str, cfg: dict, seed: int, overrides: dict | None = None) -> BaseModel:

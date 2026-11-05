@@ -18,14 +18,14 @@ from .config import artifacts_dir, config_hash, package_versions, processed_dir,
 from .data import TARGET
 from .features import CORE_ABLATION
 from .metrics import summarize
-from .models import build_model
+from .models import TORCH_MODELS, build_model
 from .prepare import load_prepared
 from .splits import assert_disjoint, transfer_split
 
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -44,7 +44,7 @@ class RunSpec:
             parts.append("histrows")
         if self.variant:
             parts.append(self.variant)
-        if self.model == "mlp":
+        if self.model in TORCH_MODELS:
             parts.append(f"s{self.seed}")
         return "__".join(parts)
 
@@ -121,7 +121,11 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
         for name, ov in cfg.get("objective_variants", {}).items():
             runs.append(RunSpec("objective", "A", fs, "lightgbm", history_only=hist, tune_from=base, variant=name, overrides=ov))
 
-    # 9. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 9. Follow-up: deep-learning architectures on the two best specialist feature sets.
+    for fs, hist in [("X_all+anyhist", False), ("X_all+history_rich+anyhist", True)]:
+        runs.append(RunSpec("dl_arch", "A", fs, "embed_mlp", seed=seeds[0], history_only=hist))
+
+    # 10. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,
@@ -237,7 +241,7 @@ def train(cfg: dict, experiments: list[str] | None = None, force: bool = False, 
     if only:
         specs = [s for s in specs if only in s.run_id]
     # Non-MLP first: chrono/transfer LightGBM runs reuse params selected in ablation runs.
-    groups = [[s for s in specs if s.model != "mlp"], [s for s in specs if s.model == "mlp"]]
+    groups = [[s for s in specs if s.model not in TORCH_MODELS], [s for s in specs if s.model in TORCH_MODELS]]
     metas, offset = [], 0
     for group in groups:
         if group:

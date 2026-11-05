@@ -258,6 +258,16 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_first_timers", routed, T, row_filter=no_h, pairs=[(routed[2], routed[0])]))
     add(E.compare("routed_returning", routed, T, row_filter=has_h, pairs=[(routed[2], routed[0])]))
 
+    # 11. follow-up: deep-learning architectures, identical rows per specialist
+    for fs, hist in [("X_all+anyhist", False), ("X_all+history_rich+anyhist", True)]:
+        base_l = rid("expanded", "A", fs, "lightgbm", hist=hist)
+        huber = rid("objective", "A", fs, "lightgbm", hist=hist, variant="huber_kg")
+        mlp = rid("expanded", "A", fs, "mlp", s0, hist=hist)
+        emb = rid("dl_arch", "A", fs, "embed_mlp", s0, hist=hist)
+        best_ens = "ensemble__A__" + fs.replace("+", "-") + "__bestobj_mlp" + ("__histrows" if hist else "")
+        add(E.compare(f"dl_arch|{fs}", [base_l, huber, mlp, emb, best_ens], T, row_filter=has_h if hist else None,
+                      pairs=[(emb, mlp), (emb, huber), (emb, best_ens)]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

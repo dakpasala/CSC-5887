@@ -54,13 +54,15 @@ from deadlift_prediction.config import load_config, PROJECT_ROOT
 from deadlift_prediction.models import build_model, BaseModel
 cfg = load_config(PROJECT_ROOT / "configs" / "smoke.yaml")
 df, y = _data()
-m = build_model("mlp", "D_plus_equipment", cfg, 42).fit(df[:400], y[:400], df[400:500], y[400:500])
-t = df[500:].copy(); t.loc[t.index[:10], "Equipment"] = "Multi-ply"
-p1 = m.predict(t)
-path = pathlib.Path(tempfile.mkdtemp()) / "m.pkl"; m.save(path)
-p2 = BaseModel.load(path).predict(t)
-assert np.isfinite(p1).all() and np.allclose(p1, p2), "mlp roundtrip mismatch"
-assert abs(np.mean(p1) - np.mean(y)) < 200  # predictions are back in kg
+for kind in ["mlp", "embed_mlp"]:
+    m = build_model(kind, "E_plus_federation", cfg, 42).fit(df[:400], y[:400], df[400:500], y[400:500])
+    t = df[500:].copy(); t.loc[t.index[:10], "Equipment"] = "Multi-ply"; t.loc[t.index[10:20], "Federation"] = "NEW"
+    p1 = m.predict(t)
+    path = pathlib.Path(tempfile.mkdtemp()) / "m.pkl"; m.save(path)
+    p2 = BaseModel.load(path).predict(t)
+    assert np.isfinite(p1).all() and np.allclose(p1, p2), f"{kind} roundtrip mismatch"
+    assert abs(np.mean(p1) - np.mean(y)) < 200  # predictions are back in kg
+    assert m.prep.fitted_rows == 400
 print("MLP_OK")
 """
 

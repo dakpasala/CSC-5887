@@ -59,6 +59,19 @@ models:
     loss: l1                       # matches the primary metric (MAE)
     device: auto                   # cuda if available, otherwise cpu
     seeds: [42, 43, 44]            # repeated seeds for the final (feature set D) MLP
+  embed_mlp:                       # deep-learning architecture follow-up
+    hidden: [256, 128]
+    dropout: 0.1
+    lr: 0.001
+    batch_size: 4096
+    max_epochs: 40
+    patience: 5
+    loss: l1
+    n_frequencies: 16
+    frequency_scale: 0.5             # std of initial periodic frequencies (standardized inputs)
+    d_embedding: 16
+    d_cat: 8
+    device: auto
 
 # Capacity check (protocol A, feature sets D and D+history), added after the base
 # runs and judged on VALIDATION only, before any test scoring. Selection rule fixed

@@ -23,6 +23,10 @@ models:
     patience: 2
     batch_size: 256
     seeds: [42]
+  embed_mlp:
+    max_epochs: 3
+    patience: 2
+    batch_size: 256
 evaluation:
   bootstrap_reps: 20
   sparse_rows: 20
