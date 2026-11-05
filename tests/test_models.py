@@ -54,7 +54,7 @@ from deadlift_prediction.config import load_config, PROJECT_ROOT
 from deadlift_prediction.models import build_model, BaseModel
 cfg = load_config(PROJECT_ROOT / "configs" / "smoke.yaml")
 df, y = _data()
-for kind in ["mlp", "embed_mlp"]:  # (GRU round trip is covered by the smoke pipeline + test_sequences)
+for kind in ["mlp", "embed_mlp", "resnet_mlp"]:  # GRU has its own isolated round-trip test
     m = build_model(kind, "E_plus_federation", cfg, 42).fit(df[:400], y[:400], df[400:500], y[400:500])
     t = df[500:].copy(); t.loc[t.index[:10], "Equipment"] = "Multi-ply"; t.loc[t.index[10:20], "Federation"] = "NEW"
     p1 = m.predict(t)
@@ -142,3 +142,27 @@ def test_gru_roundtrip_in_isolated_process():
     import pathlib
     r = subprocess.run([sys.executable, "-c", GRU_CHECK, str(pathlib.Path(__file__).parent)], capture_output=True, text=True, timeout=300)
     assert "GRU_OK" in r.stdout, r.stderr[-2000:]
+
+
+def test_seed_average_is_mean_of_seed_runs(cfg, tmp_path, monkeypatch):
+    import deadlift_prediction.ensemble as ens
+    from deadlift_prediction.config import write_json
+    from deadlift_prediction.train import RunSpec
+
+    monkeypatch.setattr(ens, "artifacts_dir", lambda c: tmp_path)
+    monkeypatch.setattr("deadlift_prediction.hpo.TARGETS", {"embed_all": ("embed_mlp", "X_all+anyhist+dlatt", False)})
+    cfg = {**cfg, "seedavg": {"extra_seeds": [43, 44]}}
+    preds = {42: [100.0, 200.0], 43: [110.0, 190.0], 44: [90.0, 210.0]}
+    for sd, yh in preds.items():
+        rid = RunSpec("tuned", "A", "X_all+anyhist+dlatt", "embed_mlp", seed=sd, variant="hpo").run_id
+        d = tmp_path / "runs" / rid
+        d.mkdir(parents=True)
+        pd.DataFrame({"row_id": ["a", "b"], "lifter_key": ["x", "y"], "partition": ["val", "val"], "y": [100.0, 200.0],
+                      "yhat": yh}).to_parquet(d / "predictions.parquet")
+        write_json(d / "meta.json", {"protocol": "A", "feature_set": "X_all+anyhist+dlatt", "seed": sd, "history_only": False,
+                                     "split_id": "x", "train_rows": 1, "train_lifters": 1, "val_rows": 2})
+        write_json(d / "done.json", {"ok": True})
+    (meta,) = ens.build_seedavg(cfg)
+    assert meta["selected"]["n_seeds"] == 3
+    p = pd.read_parquet(tmp_path / "runs" / "seedavg__A__embed_all" / "predictions.parquet")
+    np.testing.assert_allclose(p["yhat"], [100.0, 200.0])

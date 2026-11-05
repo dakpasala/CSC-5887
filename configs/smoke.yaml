@@ -27,6 +27,10 @@ models:
     max_epochs: 3
     patience: 2
     batch_size: 256
+  resnet_mlp:
+    max_epochs: 3
+    patience: 2
+    batch_size: 256
   gru:
     max_epochs: 2
     patience: 1
@@ -35,6 +39,10 @@ hpo:
   seed: 0
   train_fraction: 1.0
   trials: {lightgbm: 2, embed_mlp: 1, gru: 1}
+# Follow-up: extra seeds for the tuned models; predictions are averaged per model.
+seedavg:
+  extra_seeds: [43, 44]
+
 evaluation:
   bootstrap_reps: 20
   sparse_rows: 20

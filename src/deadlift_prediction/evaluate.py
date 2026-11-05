@@ -318,6 +318,25 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_tuned_first_timers", rt, T, row_filter=no_h, pairs=[(rt[1], rt[0])]))
     add(E.compare("routed_tuned_returning", rt, T, row_filter=has_h, pairs=[(rt[1], rt[0])]))
 
+    # 15. follow-up: seed averaging and tabular ResNet
+    from .ensemble import seedavg_id
+    from .hpo import TARGETS as HPO_TARGETS
+    for name, (kind, fs, hist) in HPO_TARGETS.items():
+        base = rid("tuned", "A", fs, kind, s0, hist=hist, variant="hpo")
+        add(E.compare(f"seedavg|{name}", [base, seedavg_id(name)], T, row_filter=has_h if hist else None,
+                      pairs=[(seedavg_id(name), base)]))
+    for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+        res = rid("resnet", "A", fs, "resnet_mlp", s0, hist=hist)
+        emb = rid("dlatt", "A", fs, "embed_mlp", s0, hist=hist)
+        prev = "ensemble__A__seedavg_ret__histrows" if hist else "ensemble__A__seedavg_all"
+        fin = "ensemble__A__final_ret__histrows" if hist else "ensemble__A__final_all"
+        add(E.compare(f"resnet|{'returning' if hist else 'all_rows'}", [emb, res, prev, fin], T, row_filter=has_h if hist else None,
+                      pairs=[(res, emb), (fin, prev)]))
+    rs = ["routed__A__tuned_specialists", "routed__A__seedavg_specialists", "routed__A__final_specialists"]
+    add(E.compare("routed_final_all_lifters", rs, T, pairs=[(rs[1], rs[0]), (rs[2], rs[1]), (rs[2], "routed__A__gru_specialists")]))
+    add(E.compare("routed_final_first_timers", rs, T, row_filter=no_h, pairs=[(rs[2], rs[0])]))
+    add(E.compare("routed_final_returning", rs, T, row_filter=has_h, pairs=[(rs[2], rs[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

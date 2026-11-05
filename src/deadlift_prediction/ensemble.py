@@ -139,7 +139,54 @@ ROUTED = {
                                      "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"),
     "routed__A__gru_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed", "ensemble__A__seq_gru_blend__histrows"),
     "routed__A__tuned_specialists": ("ensemble__A__tuned_all", "ensemble__A__tuned_ret__histrows"),
+    "routed__A__seedavg_specialists": ("ensemble__A__seedavg_all", "ensemble__A__seedavg_ret__histrows"),
+    "routed__A__final_specialists": ("ensemble__A__final_all", "ensemble__A__final_ret__histrows"),
 }
+
+
+def seedavg_id(name: str) -> str:
+    return f"seedavg__A__{name}"
+
+
+# Seed-averaged tuned models, re-blended, then a tabular ResNet blended on top.
+SEEDAVG_BLENDS = [
+    (seedavg_id("lgbm_all"), seedavg_id("embed_all"), "ensemble__A__seedavg_all"),
+    (seedavg_id("lgbm_ret"), seedavg_id("embed_ret"), "ensemble__A__seedavg_ret_le__histrows"),
+    ("ensemble__A__seedavg_ret_le__histrows", seedavg_id("gru_ret"), "ensemble__A__seedavg_ret__histrows"),
+    ("ensemble__A__seedavg_all", "resnet__A__X_all-anyhist-dlatt__resnet_mlp__s42", "ensemble__A__final_all"),
+    ("ensemble__A__seedavg_ret__histrows", "resnet__A__X_all-history_rich-anyhist-dlatt__resnet_mlp__histrows__s42",
+     "ensemble__A__final_ret__histrows"),
+]
+
+
+def build_seedavg(cfg: dict) -> list[dict]:
+    """Average each tuned model's predictions over its available seeds (base seed +
+    extra seeds). Deterministic LightGBM settings have one seed, so the average is
+    the tuned model itself."""
+    from .hpo import TARGETS
+    from .train import RunSpec
+
+    root = artifacts_dir(cfg) / "runs"
+    base_seed = cfg["models"]["mlp"]["seeds"][0]
+    extra = cfg.get("seedavg", {}).get("extra_seeds", [])
+    metas = []
+    for name, (kind, fs, hist) in TARGETS.items():
+        ids = [RunSpec("tuned", "A", fs, kind, seed=base_seed, history_only=hist, variant="hpo").run_id]
+        for sd in extra:
+            v = f"hpo_s{sd}" if kind == "lightgbm" else "hpo"
+            ids.append(RunSpec("tuned", "A", fs, kind, seed=sd, history_only=hist, variant=v).run_id)
+        ids = [r for r in ids if (root / r / "done.json").exists()]
+        if not ids:
+            continue
+        frames = [pd.read_parquet(root / r / "predictions.parquet").set_index(["row_id", "partition"]) for r in ids]
+        out = frames[0].copy()
+        out["yhat"] = np.mean([f.loc[out.index, "yhat"].to_numpy() for f in frames], axis=0)
+        tmpl = read_json(root / ids[0] / "meta.json")
+        meta = _write_pseudo_run(cfg, seedavg_id(name), out.reset_index(), tmpl,
+                                 {"averaged_runs": ids, "n_seeds": len(ids)}, ids, "seedavg")
+        print(f"{seedavg_id(name)}: {len(ids)} seed(s), val MAE {meta['val_metrics']['mae']:.3f}")
+        metas.append(meta)
+    return metas
 
 # Hyperparameter-search follow-up: blends of the refit tuned models (weights chosen on validation).
 TUNED_BLENDS = [
@@ -173,7 +220,7 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     earlier full-power meet exists (known before the deadlift)."""
     root = artifacts_dir(cfg) / "runs"
     best = best_objective_runs(cfg)
-    metas = []
+    metas = build_seedavg(cfg)
     mlps = {"X_all+anyhist": [("expanded__A__X_all-anyhist__mlp__s42", "ensemble__A__X_all-anyhist__bestobj_mlp"),
                               ("dl_arch__A__X_all-anyhist__embed_mlp__s42", "ensemble__A__X_all-anyhist__bestobj_embed")],
             "X_all+history_rich+anyhist": [
@@ -184,7 +231,7 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
     # Later blends may consume earlier ones (SEQ_BLENDS uses a DLATT blend), so
     # existence is checked inside the loop, in order.
-    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS]
+    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS + SEEDAVG_BLENDS]
     for fs, lgbm_id, mlp_id, run_id in jobs:
         if not ((root / lgbm_id / "done.json").exists() and (root / mlp_id / "done.json").exists()):
             continue

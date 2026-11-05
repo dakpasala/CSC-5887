@@ -19,8 +19,11 @@ def test_synthetic_pipeline_end_to_end():
     assert len(runs) == len(out["runs"]) + len(out["ensembles"])
     from deadlift_prediction.ensemble import PAIRS
     from deadlift_prediction.ensemble import ROUTED
-    from deadlift_prediction.ensemble import DLATT_BLENDS, SEQ_BLENDS, TUNED_BLENDS
-    assert len(out["ensembles"]) == len(PAIRS) + 4 + len(DLATT_BLENDS) + len(SEQ_BLENDS) + len(TUNED_BLENDS) + len(ROUTED)
+    from deadlift_prediction.ensemble import DLATT_BLENDS, SEEDAVG_BLENDS, SEQ_BLENDS, TUNED_BLENDS
+    from deadlift_prediction.hpo import TARGETS as HPO_T
+    assert len(out["ensembles"]) == (len(PAIRS) + 4 + len(DLATT_BLENDS) + len(SEQ_BLENDS) + len(TUNED_BLENDS)
+                                     + len(SEEDAVG_BLENDS) + len(HPO_T) + len(ROUTED))
+    assert {"routed_final_all_lifters"} <= set(m["comparison"])
     assert any(r["experiment"] == "tuned" for r in out["runs"])
     assert {"routed_all_lifters", "routed_first_timers", "routed_returning"} <= set(m["comparison"])
     assert any(c.startswith("expanded_") for c in m["comparison"])

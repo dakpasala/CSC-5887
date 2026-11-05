@@ -553,8 +553,130 @@ class GRUModel(BaseModel):
             self.net = net.eval()
 
 
-MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel, GRUModel]}
-TORCH_MODELS = {"mlp", "embed_mlp", "gru"}
+class ResNetMLPModel(BaseModel):
+    """Tabular ResNet (Gorishniy et al., 2021), architecture follow-up.
+
+    Input: the same dense preprocessed matrix as MLPModel. Linear(d_in -> d),
+    then n_blocks residual blocks x + Dropout(Linear(Dropout(ReLU(Linear(BN(x)))))),
+    then BN -> ReLU -> Linear(d -> 1). Training matches the other networks:
+    standardized target, L1, Adam, validation early stopping on MAE (kg)."""
+
+    kind = "resnet_mlp"
+
+    def _build(self, d_in: int):
+        import torch
+        from torch import nn
+
+        p = self.params
+
+        class Block(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.f = nn.Sequential(nn.BatchNorm1d(p["d"]), nn.Linear(p["d"], p["d_hidden"]), nn.ReLU(),
+                                       nn.Dropout(p["dropout_hidden"]), nn.Linear(p["d_hidden"], p["d"]),
+                                       nn.Dropout(p["dropout_residual"]))
+
+            def forward(self, x):
+                return x + self.f(x)
+
+        class Net(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.inp = nn.Linear(d_in, p["d"])
+                self.blocks = nn.Sequential(*[Block() for _ in range(p["n_blocks"])])
+                self.out = nn.Sequential(nn.BatchNorm1d(p["d"]), nn.ReLU(), nn.Linear(p["d"], 1))
+
+            def forward(self, x):
+                return self.out(self.blocks(self.inp(x))).squeeze(1)
+
+        return Net()
+
+    def fit(self, train, y_train, val, y_val):
+        import torch
+        from torch import nn
+
+        p = self.params
+        torch.manual_seed(self.seed)
+        np.random.seed(self.seed)
+        self._prep(train)
+        device = p.get("device", "auto")
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        Xtr = torch.from_numpy(self.prep.dense(train))
+        Xva = torch.from_numpy(self.prep.dense(val)).to(device)
+        self.d_in = Xtr.shape[1]
+        self.y_mean, self.y_std = float(y_train.mean()), float(y_train.std() or 1.0)
+        ytr = torch.from_numpy(((y_train - self.y_mean) / self.y_std).astype("float32"))
+        net = self._build(self.d_in).to(device)
+        opt = torch.optim.Adam(net.parameters(), lr=p["lr"])
+        loss_fn = nn.L1Loss()
+        gen = torch.Generator().manual_seed(self.seed)
+        best, bad = (np.inf, None, -1), 0
+        for epoch in range(p["max_epochs"]):
+            net.train()
+            t0 = time.time()
+            perm = torch.randperm(len(Xtr), generator=gen)
+            total = 0.0
+            for i in range(0, len(perm), p["batch_size"]):
+                idx = perm[i:i + p["batch_size"]]
+                if len(idx) < 2:
+                    continue  # BatchNorm needs > 1 row
+                opt.zero_grad()
+                loss = loss_fn(net(Xtr[idx].to(device)), ytr[idx].to(device))
+                loss.backward()
+                opt.step()
+                total += loss.item() * len(idx)
+            score = mae(y_val, self._forward(net, Xva))
+            self.tuning.append({"epoch": epoch, "train_loss": total / len(perm), "val_mae": score, "seconds": time.time() - t0})
+            if score < best[0] - 1e-6:
+                best, bad = (score, copy.deepcopy(net.state_dict()), epoch), 0
+            else:
+                bad += 1
+                if bad >= p["patience"]:
+                    break
+        net.load_state_dict(best[1])
+        self.net = net.cpu().eval()
+        self.selected = {k: p[k] for k in ["d", "d_hidden", "n_blocks", "dropout_hidden", "dropout_residual", "lr", "batch_size"]}
+        self.selected.update({"best_epoch": best[2], "epochs_run": len(self.tuning), "loss": "l1", "device": device,
+                              "parameters": int(sum(t.numel() for t in self.net.parameters()))})
+        return self
+
+    def _forward(self, net, X):
+        import torch
+
+        net.eval()
+        out = []
+        with torch.no_grad():
+            for i in range(0, len(X), 65536):
+                out.append(net(X[i:i + 65536]).cpu().numpy())
+        return np.concatenate(out).astype("float64") * self.y_std + self.y_mean
+
+    def predict(self, df):
+        import torch
+
+        return self._forward(self.net, torch.from_numpy(self.prep.dense(df)))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        net = state.pop("net", None)
+        if net is not None:
+            state["_weights"] = {k: v.detach().cpu().numpy() for k, v in net.state_dict().items()}
+        return state
+
+    def __setstate__(self, state):
+        weights = state.pop("_weights", None)
+        self.__dict__.update(state)
+        if weights is not None:
+            import torch
+
+            net = self._build(self.d_in)
+            net.load_state_dict({k: torch.from_numpy(v) for k, v in weights.items()})
+            self.net = net.eval()
+
+
+MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel,
+                                     GRUModel, ResNetMLPModel]}
+TORCH_MODELS = {"mlp", "embed_mlp", "gru", "resnet_mlp"}
 
 
 def build_model(kind: str, feature_set: str, cfg: dict, seed: int, overrides: dict | None = None) -> BaseModel:

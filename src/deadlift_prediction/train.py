@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -148,7 +148,23 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
         if ov is not None:
             runs.append(RunSpec("tuned", "A", fs, kind, seed=seeds[0], history_only=hist, variant="hpo", overrides=ov))
 
-    # 13. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 13. Follow-up: extra seeds of the tuned models (averaged later) and a tabular ResNet.
+    extra = cfg.get("seedavg", {}).get("extra_seeds", [])
+    for name, (kind, fs, hist) in TARGETS.items():
+        ov = best_overrides(cfg, name)
+        if ov is None:
+            continue
+        if kind == "lightgbm":
+            tree = ov["fixed_grid"][0]
+            if tree.get("subsample", 1.0) >= 1.0 and tree.get("colsample_bytree", 1.0) >= 1.0:
+                continue  # deterministic: other seeds would give identical trees
+            runs += [RunSpec("tuned", "A", fs, kind, seed=sd, history_only=hist, variant=f"hpo_s{sd}", overrides=ov) for sd in extra]
+        else:
+            runs += [RunSpec("tuned", "A", fs, kind, seed=sd, history_only=hist, variant="hpo", overrides=ov) for sd in extra]
+    for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+        runs.append(RunSpec("resnet", "A", fs, "resnet_mlp", seed=seeds[0], history_only=hist))
+
+    # 14. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

@@ -72,6 +72,17 @@ models:
     d_embedding: 16
     d_cat: 8
     device: auto
+  resnet_mlp:                      # architecture follow-up (Gorishniy et al. 2021 tabular ResNet)
+    d: 256
+    d_hidden: 512
+    n_blocks: 3
+    dropout_hidden: 0.1
+    dropout_residual: 0.0
+    lr: 0.001
+    batch_size: 4096
+    max_epochs: 40
+    patience: 5
+    device: auto
   gru:                             # sequence follow-up (returning lifters)
     seq_len: 8
     gru_hidden: 64
@@ -120,6 +131,10 @@ hpo:
   seed: 0
   train_fraction: 0.3
   trials: {lightgbm: 16, embed_mlp: 8, gru: 6}
+
+# Follow-up: extra seeds for the tuned models; predictions are averaged per model.
+seedavg:
+  extra_seeds: [43, 44]
 
 evaluation:
   bootstrap_reps: 200
