@@ -278,6 +278,39 @@ were fixed in advance, with no search. Parameter counts are 135k for the all-lif
 Architecture changes how evenly the two model families perform, but not the overall level. As with the capacity
 check, the limit is the information in the inputs.
 
+#### Follow-up: previous meets' deadlift attempts (post-hoc)
+
+These features come from the lifter's **previous** deadlift meet (any event, strictly earlier date):
+
+- heaviest attempted deadlift, misses included;
+- that attempt ÷ the best made lift (above 1 after a missed heavier attempt);
+- opener ÷ best, and the number of good attempts;
+- career-max attempted deadlift;
+- change in best deadlift per year between the last two deadlift meets, when they are at least 60 days apart.
+
+The current meet's deadlift attempts never enter the cleaned table, and tests check this. Attempts are reported
+for 47.6% of historical deadlift entries. Settings reuse the Huber LightGBM and embedding-MLP configurations, with
+blend weights chosen on validation.
+
+| Test MAE (kg), identical rows | Before | + past attempts | Paired Δ |
+|---|---|---|---|
+| All-lifter Huber LightGBM (386,613) | 10.20 | 10.15 | −0.054 [−0.060, −0.048] |
+| All-lifter embedding MLP | 10.23 | 10.16 | −0.066 [−0.077, −0.055] |
+| All-lifter blend | 10.14 | **10.07** | −0.065 [−0.073, −0.058] |
+| Returning-lifter Huber LightGBM (268,289) | 8.25 | 8.21 | −0.047 [−0.053, −0.040] |
+| Returning-lifter embedding MLP | 8.25 | 8.26 | +0.015 [0.003, 0.026] |
+| Returning-lifter blend | 8.17 | **8.15** | −0.024 [−0.032, −0.016] |
+| **Best routed system, all lifters** | 9.66 | **9.64** [9.60, 9.69] | −0.016 [−0.022, −0.011] |
+| First-timers, routed | 13.02 | 13.03 | +0.001 [−0.009, 0.011] |
+
+- **Small gain.** The new features help the tree model in both specialists but don't help the returning-lifter
+  embedding MLP. In the routed system they move only returning lifters, by 0.02 kg. First-timers have no earlier
+  deadlift meet, so nothing changes for them.
+- **Below expectations.** The expected 0.1–0.3 kg did not appear. A missed heavier attempt is mostly already
+  reflected in the made deadlift and career-best features.
+- **Best system now:** 9.64 kg for all lifters, 13.03 kg for first-timers, 8.15 kg for returning lifters. The
+  median absolute error is 6.8 kg; 65% of predictions fall within 10 kg and 89% within 20 kg.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -333,6 +366,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Averaging LightGBM and the MLP will gain 0.1–0.3 kg."** It gained 0–0.09 kg; the two models' errors are highly correlated.
 - **"Squat/bench attempt details will help first-timers."** Only marginally (−0.06 kg); age-class fill and context helped more.
 - **"Predicting the deadlift-to-squat ratio will help."** It did not (+0.0 to +0.1 kg); the Huber loss on kg did help slightly (−0.1 kg).
+- **"Previous meets' deadlift attempts will cut error by 0.1–0.3 kg."** They cut it by 0.02 kg overall (0.05–0.07 kg per single model).
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -396,11 +430,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 51 tests
+.venv/bin/pytest -q                                    # 54 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 9 ensembles + 4 routed systems
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 11 ensembles + 5 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```
