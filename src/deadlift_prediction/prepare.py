@@ -9,7 +9,7 @@ import pandas as pd
 from . import synthetic
 from .config import config_hash, processed_dir, reports_dir, write_json
 from .data import clean, clean_aux, load_raw_sbd
-from .features import add_any_history, add_history, add_same_meet_extras
+from .features import add_any_history, add_history, add_same_meet_extras, build_sequence_table
 from .identity import identity_audit
 from .splits import (assert_disjoint, balance_table, chrono_boundaries, chrono_split, group_split,
                      manifest_id, select_transfer_groups)
@@ -29,7 +29,8 @@ def prepare(cfg: dict) -> dict:
 
     if cfg.get("synthetic"):
         raw = synthetic.make_raw(seed=cfg["seed"])
-        aux_raw = raw[["Name", "Event", "Equipment", "Date", "Best3DeadliftKg", "Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg"]].copy()
+        aux_raw = raw[["Name", "Event", "Equipment", "Date", "Best3DeadliftKg", "Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg",
+                       "Best3SquatKg", "Best3BenchKg"]].copy()
         meta = {"source_url": "SYNTHETIC FIXTURE (not OpenPowerlifting)", "sha256": "synthetic", "raw_rows": len(raw),
                 "event_counts": raw["Event"].value_counts().to_dict(), "archive": None}
     else:
@@ -48,6 +49,7 @@ def prepare(cfg: dict) -> dict:
     aux, aux_info = clean_aux(aux_raw, cfg)
     del aux_raw
     df = add_any_history(df, aux)
+    build_sequence_table(aux).to_parquet(out_dir / "seq_table.parquet", index=False)
 
     df["split_A"] = group_split(df, cfg["splits"]["group"], cfg["seed"]).to_numpy()
     assert_disjoint(df, df["split_A"], by_lifter=True)

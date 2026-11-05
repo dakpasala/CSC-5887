@@ -72,6 +72,17 @@ models:
     d_embedding: 16
     d_cat: 8
     device: auto
+  gru:                             # sequence follow-up (returning lifters)
+    seq_len: 8
+    gru_hidden: 64
+    static_hidden: 128
+    hidden: [128, 64]
+    dropout: 0.1
+    lr: 0.001
+    batch_size: 4096
+    max_epochs: 30
+    patience: 4
+    device: auto
 
 # Capacity check (protocol A, feature sets D and D+history), added after the base
 # runs and judged on VALIDATION only, before any test scoring. Selection rule fixed

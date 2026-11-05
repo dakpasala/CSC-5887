@@ -412,12 +412,157 @@ class EmbedMLPModel(BaseModel):
             self.net = net.eval()
 
 
-MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel]}
-TORCH_MODELS = {"mlp", "embed_mlp"}
+_SEQ_TABLES: dict[str, pd.DataFrame] = {}
+
+
+def _seq_table(path: str) -> pd.DataFrame:
+    if path not in _SEQ_TABLES:
+        _SEQ_TABLES[path] = pd.read_parquet(path)
+    return _SEQ_TABLES[path]
+
+
+class GRUModel(BaseModel):
+    """Sequence model over a lifter's earlier meets (deep-learning follow-up).
+
+    Input 1: the last `seq_len` lifter-days of deadlift history from any event,
+    strictly before the target date (features.build_sequences), read by a GRU.
+    Input 2: the current meet's preprocessed static features (same dense matrix
+    as MLPModel for the run's feature set). The GRU's final hidden state is
+    concatenated with a projection of the static features and fed to an MLP.
+    Training matches the other networks: standardized target, L1, Adam,
+    validation early stopping on MAE (kg). Sequence features use fixed scalings,
+    so nothing in them is fitted on non-training rows."""
+
+    kind = "gru"
+
+    def _inputs(self, df):
+        import torch
+
+        from .features import build_sequences
+
+        seq = build_sequences(df, _seq_table(self.params["seq_table"]), self.params["seq_len"])
+        return torch.from_numpy(seq), torch.from_numpy(self.prep.dense(df))
+
+    def _build(self, n_static: int):
+        import torch
+        from torch import nn
+
+        from .features import SEQ_STEP_FEATURES
+
+        p = self.params
+
+        class Net(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.gru = nn.GRU(len(SEQ_STEP_FEATURES), p["gru_hidden"], num_layers=p.get("gru_layers", 1), batch_first=True)
+                self.static = nn.Sequential(nn.Linear(n_static, p["static_hidden"]), nn.ReLU())
+                layers, width = [], p["gru_hidden"] + p["static_hidden"]
+                for h in p["hidden"]:
+                    layers += [nn.Linear(width, h), nn.ReLU()]
+                    if p.get("dropout"):
+                        layers.append(nn.Dropout(p["dropout"]))
+                    width = h
+                layers.append(nn.Linear(width, 1))
+                self.head = nn.Sequential(*layers)
+
+            def forward(self, seq, static):
+                _, h = self.gru(seq)
+                return self.head(torch.cat([h[-1], self.static(static)], dim=1)).squeeze(1)
+
+        return Net()
+
+    def fit(self, train, y_train, val, y_val):
+        import torch
+        from torch import nn
+
+        p = self.params
+        torch.manual_seed(self.seed)
+        np.random.seed(self.seed)
+        torch.set_num_threads(os.cpu_count() or 1)
+        self._prep(train)
+        device = p.get("device", "auto")
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        tr = self._inputs(train)
+        va = tuple(t.to(device) for t in self._inputs(val))
+        self.n_static = tr[1].shape[1]
+        self.y_mean, self.y_std = float(y_train.mean()), float(y_train.std() or 1.0)
+        ytr = torch.from_numpy(((y_train - self.y_mean) / self.y_std).astype("float32"))
+        net = self._build(self.n_static).to(device)
+        opt = torch.optim.Adam(net.parameters(), lr=p["lr"])
+        loss_fn = nn.L1Loss()
+        gen = torch.Generator().manual_seed(self.seed)
+        best, bad = (np.inf, None, -1), 0
+        for epoch in range(p["max_epochs"]):
+            net.train()
+            t0 = time.time()
+            perm = torch.randperm(len(ytr), generator=gen)
+            total = 0.0
+            for i in range(0, len(perm), p["batch_size"]):
+                idx = perm[i:i + p["batch_size"]]
+                opt.zero_grad()
+                loss = loss_fn(net(tr[0][idx].to(device), tr[1][idx].to(device)), ytr[idx].to(device))
+                loss.backward()
+                opt.step()
+                total += loss.item() * len(idx)
+            score = mae(y_val, self._forward(net, va))
+            self.tuning.append({"epoch": epoch, "train_loss": total / len(perm), "val_mae": score, "seconds": time.time() - t0})
+            print(f"    gru epoch {epoch}: val MAE {score:.3f} ({time.time() - t0:.0f}s)", flush=True)
+            if score < best[0] - 1e-6:
+                best, bad = (score, copy.deepcopy(net.state_dict()), epoch), 0
+            else:
+                bad += 1
+                if bad >= p["patience"]:
+                    break
+        net.load_state_dict(best[1])
+        self.net = net.cpu().eval()
+        self.selected = {k: p[k] for k in ["seq_len", "gru_hidden", "static_hidden", "hidden", "dropout", "lr", "batch_size"]}
+        self.selected.update({"best_epoch": best[2], "epochs_run": len(self.tuning), "loss": "l1",
+                              "parameters": int(sum(t.numel() for t in self.net.parameters())), "device": device,
+                              "sequence": "last seq_len lifter-days of any-event deadlift history, strictly earlier"})
+        return self
+
+    def _forward(self, net, inputs):
+        import torch
+
+        net.eval()
+        out = []
+        with torch.no_grad():
+            for i in range(0, len(inputs[0]), 32768):
+                out.append(net(inputs[0][i:i + 32768], inputs[1][i:i + 32768]).cpu().numpy())
+        return np.concatenate(out).astype("float64") * self.y_std + self.y_mean
+
+    def predict(self, df):
+        return self._forward(self.net, self._inputs(df))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        net = state.pop("net", None)
+        if net is not None:
+            state["_weights"] = {k: v.detach().cpu().numpy() for k, v in net.state_dict().items()}
+        return state
+
+    def __setstate__(self, state):
+        weights = state.pop("_weights", None)
+        self.__dict__.update(state)
+        if weights is not None:
+            import torch
+
+            net = self._build(self.n_static)
+            net.load_state_dict({k: torch.from_numpy(v) for k, v in weights.items()})
+            self.net = net.eval()
+
+
+MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel, GRUModel]}
+TORCH_MODELS = {"mlp", "embed_mlp", "gru"}
 
 
 def build_model(kind: str, feature_set: str, cfg: dict, seed: int, overrides: dict | None = None) -> BaseModel:
     params = dict(cfg["models"].get(kind, {}))
     params.update(overrides or {})
+    if kind == "gru":
+        from .config import processed_dir
+
+        params.setdefault("seq_table", str(processed_dir(cfg) / "seq_table.parquet"))
     min_count = cfg["features"]["federation_min_count"]
     return MODEL_CLASSES[kind](feature_set, params, seed=seed, min_count=min_count)

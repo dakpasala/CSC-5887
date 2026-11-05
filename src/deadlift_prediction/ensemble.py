@@ -137,7 +137,14 @@ ROUTED = {
                                      "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows"),
     "routed__A__dlatt_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed",
                                      "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"),
+    "routed__A__gru_specialists": ("ensemble__A__X_all-anyhist-dlatt__huber_embed", "ensemble__A__seq_gru_blend__histrows"),
 }
+
+# GRU follow-up: current best returning-lifter blend + hybrid GRU (weight chosen on validation).
+SEQ_BLENDS = [
+    ("ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows",
+     "seq__A__X_all-history_rich-anyhist-dlatt__gru__histrows__s42", "ensemble__A__seq_gru_blend__histrows"),
+]
 
 # Fixed (LightGBM, embedding MLP, blend) triples for the past-deadlift-attempt follow-up.
 DLATT_BLENDS = [
@@ -165,10 +172,11 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
                 ("dl_arch__A__X_all-history_rich-anyhist__embed_mlp__histrows__s42",
                  "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows")]}
     jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
-    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS
-             if (root / lgbm_id / "done.json").exists()]
+    # Later blends may consume earlier ones (SEQ_BLENDS uses a DLATT blend), so
+    # existence is checked inside the loop, in order.
+    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS]
     for fs, lgbm_id, mlp_id, run_id in jobs:
-        if not (root / mlp_id / "done.json").exists():
+        if not ((root / lgbm_id / "done.json").exists() and (root / mlp_id / "done.json").exists()):
             continue
         m, w, tuning = _blend(root, lgbm_id, mlp_id)
         tmpl = read_json(root / lgbm_id / "meta.json")

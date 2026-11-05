@@ -54,7 +54,7 @@ from deadlift_prediction.config import load_config, PROJECT_ROOT
 from deadlift_prediction.models import build_model, BaseModel
 cfg = load_config(PROJECT_ROOT / "configs" / "smoke.yaml")
 df, y = _data()
-for kind in ["mlp", "embed_mlp"]:
+for kind in ["mlp", "embed_mlp"]:  # (GRU round trip is covered by the smoke pipeline + test_sequences)
     m = build_model(kind, "E_plus_federation", cfg, 42).fit(df[:400], y[:400], df[400:500], y[400:500])
     t = df[500:].copy(); t.loc[t.index[:10], "Equipment"] = "Multi-ply"; t.loc[t.index[10:20], "Federation"] = "NEW"
     p1 = m.predict(t)
@@ -110,3 +110,35 @@ def test_lightgbm_objective_and_ratio_variants(ov, cfg, tmp_path):
     m.save(tmp_path / "m.pkl")
     np.testing.assert_allclose(BaseModel.load(tmp_path / "m.pkl").predict(df[500:]), p)
     assert m.selected["target"] == ov.get("target", "kg")
+
+
+GRU_CHECK = r"""
+import numpy as np, pandas as pd, sys, tempfile, pathlib
+sys.path.insert(0, sys.argv[1])
+from test_models import _data
+from deadlift_prediction.config import load_config, PROJECT_ROOT
+from deadlift_prediction.features import build_sequence_table
+from deadlift_prediction.models import build_model, BaseModel
+cfg = load_config(PROJECT_ROOT / "configs" / "smoke.yaml")
+df, y = _data()
+rng = np.random.default_rng(1)
+df["lifter_key"] = [f"L{i % 150}" for i in range(len(df))]
+df["Date"] = pd.Timestamp("2020-01-01") + pd.to_timedelta(rng.integers(0, 1500, len(df)), unit="D")
+aux = pd.DataFrame({"lifter_key": df["lifter_key"], "Event": "SBD", "Equipment": df["Equipment"], "Date": df["Date"],
+                    "Best3DeadliftKg": y, "Best3SquatKg": df["Best3SquatKg"], "Best3BenchKg": df["Best3BenchKg"]})
+tmp = pathlib.Path(tempfile.mkdtemp())
+build_sequence_table(aux).to_parquet(tmp / "seq.parquet")
+m = build_model("gru", "D_plus_equipment", cfg, 42, {"seq_table": str(tmp / "seq.parquet")})
+m.fit(df[:400], y[:400], df[400:500], y[400:500])
+p1 = m.predict(df[500:])
+m.save(tmp / "m.pkl")
+p2 = BaseModel.load(tmp / "m.pkl").predict(df[500:])
+assert np.isfinite(p1).all() and np.allclose(p1, p2), "gru roundtrip mismatch"
+print("GRU_OK")
+"""
+
+
+def test_gru_roundtrip_in_isolated_process():
+    import pathlib
+    r = subprocess.run([sys.executable, "-c", GRU_CHECK, str(pathlib.Path(__file__).parent)], capture_output=True, text=True, timeout=300)
+    assert "GRU_OK" in r.stdout, r.stderr[-2000:]

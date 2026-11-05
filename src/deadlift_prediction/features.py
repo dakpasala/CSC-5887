@@ -349,3 +349,67 @@ def add_any_history(df: pd.DataFrame, aux: pd.DataFrame) -> pd.DataFrame:
     assert (out.loc[has, "days_since_prev_any_deadlift"] > 0).all(), "any-event history must be strictly earlier"
     out["has_any_history"] = has
     return out
+
+
+# ---------------------------------------------------------------------------- meet sequences (GRU follow-up)
+
+SEQ_STEP_FEATURES = ["dl", "sq", "bn", "has_sq", "has_bn", "is_sbd", "is_d", "is_bd", "eq_same",
+                     "log_days_before", "att_ratio", "has_att", "is_real"]
+
+
+def build_sequence_table(aux: pd.DataFrame) -> pd.DataFrame:
+    """One row per lifter-day of any-event deadlift history (largest deadlift that
+    day, as in add_any_history), sorted by lifter then date. Fixed scalings only
+    (nothing learned), so it can be shared by all partitions."""
+    rep = aux.sort_values(["lifter_key", "Date", "Best3DeadliftKg"], ascending=[True, True, False], kind="mergesort")
+    rep = rep.drop_duplicates(["lifter_key", "Date"], keep="first").reset_index(drop=True)
+    att_cols = [c for c in ["Deadlift1Kg", "Deadlift2Kg", "Deadlift3Kg"] if c in rep.columns]
+    att = rep[att_cols].astype("float64") if att_cols else pd.DataFrame(index=rep.index)
+    max_att = att.abs().max(axis=1) if att_cols else pd.Series(np.nan, index=rep.index)
+    has_att = att.notna().any(axis=1) if att_cols else pd.Series(False, index=rep.index)
+    ratio = np.fmax(max_att, rep["Best3DeadliftKg"]) / rep["Best3DeadliftKg"]
+    sq = rep["Best3SquatKg"] if "Best3SquatKg" in rep else pd.Series(np.nan, index=rep.index)
+    bn = rep["Best3BenchKg"] if "Best3BenchKg" in rep else pd.Series(np.nan, index=rep.index)
+    sq = sq.where(sq > 0)
+    bn = bn.where(bn > 0)
+    return pd.DataFrame({
+        "lifter_key": rep["lifter_key"], "Date": rep["Date"], "Equipment": rep["Equipment"],
+        "dl": rep["Best3DeadliftKg"] / 100.0, "sq": sq.fillna(0) / 100.0, "bn": bn.fillna(0) / 100.0,
+        "has_sq": sq.notna().astype("float64"), "has_bn": bn.notna().astype("float64"),
+        "is_sbd": (rep["Event"] == "SBD").astype("float64"), "is_d": (rep["Event"] == "D").astype("float64"),
+        "is_bd": (rep["Event"] == "BD").astype("float64"),
+        "att_ratio": ratio.where(has_att).fillna(1.0) - 1.0,
+        "has_att": has_att.astype("float64"),
+    })
+
+
+def build_sequences(df: pd.DataFrame, table: pd.DataFrame, seq_len: int) -> np.ndarray:
+    """(N, seq_len, len(SEQ_STEP_FEATURES)) float32 array of each target row's
+    previous lifter-days, strictly before its date, oldest first, right-aligned
+    (left-padded with zeros; `is_real` marks real steps). Per-step `eq_same`
+    compares with the target row's equipment; `log_days_before` = log1p(days/30)."""
+    t = table.reset_index(drop=True)
+    pos = np.arange(len(t))
+    start = pd.Series(pos, index=t.index).groupby(t["lifter_key"], sort=False).transform("min").to_numpy()
+    look = pd.DataFrame({"lifter_key": t["lifter_key"], "_d": t["Date"], "_pos": pos, "_start": start}).sort_values("_d", kind="mergesort")
+    order = df["Date"].argsort(kind="mergesort").to_numpy()
+    tgt = pd.DataFrame({"lifter_key": df["lifter_key"].to_numpy()[order], "Date": df["Date"].to_numpy()[order], "_i": order})
+    m = pd.merge_asof(tgt, look, left_on="Date", right_on="_d", by="lifter_key", allow_exact_matches=False, direction="backward")
+    last = np.full(len(df), -1, dtype=np.int64)
+    lstart = np.zeros(len(df), dtype=np.int64)
+    ok = m["_pos"].notna().to_numpy()
+    last[m["_i"].to_numpy()[ok]] = m["_pos"].to_numpy()[ok].astype(np.int64)
+    lstart[m["_i"].to_numpy()[ok]] = m["_start"].to_numpy()[ok].astype(np.int64)
+    idx = last[:, None] - np.arange(seq_len - 1, -1, -1)[None, :]          # (N, L), oldest .. newest
+    valid = (last[:, None] >= 0) & (idx >= lstart[:, None])
+    idx = np.where(valid, idx, 0)
+    base = ["dl", "sq", "bn", "has_sq", "has_bn", "is_sbd", "is_d", "is_bd", "att_ratio", "has_att"]
+    vals = t[base].to_numpy(np.float32)[idx]                                # (N, L, 10)
+    days = (df["Date"].to_numpy()[:, None] - t["Date"].to_numpy()[idx]).astype("timedelta64[D]").astype(np.float32)
+    eq = (t["Equipment"].to_numpy()[idx] == df["Equipment"].to_numpy()[:, None]).astype(np.float32)
+    out = np.concatenate([vals[..., :8], eq[..., None], np.log1p(np.maximum(days, 0) / 30.0)[..., None],
+                          vals[..., 8:], np.ones_like(eq)[..., None]], axis=-1)
+    out[~valid] = 0.0
+    if valid.any():
+        assert (days[valid] > 0).all(), "sequence steps must be strictly earlier than the target meet"
+    return out.astype(np.float32)

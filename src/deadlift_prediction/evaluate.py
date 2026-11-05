@@ -287,6 +287,18 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_dlatt_first_timers", rr, T, row_filter=no_h, pairs=[(rr[1], rr[0])]))
     add(E.compare("routed_dlatt_returning", rr, T, row_filter=has_h, pairs=[(rr[1], rr[0])]))
 
+    # 13. follow-up: GRU over earlier meets (returning lifters), identical rows
+    g_h = rid("seq", "A", "X_all+history_rich+anyhist+dlatt", "gru", s0, hist=True)
+    g_p = rid("seq", "A", "X_all", "gru", s0, hist=True)
+    d_l = "dlatt__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows"
+    d_e = "dlatt__A__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__s42"
+    d_b = "ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows"
+    s_b = "ensemble__A__seq_gru_blend__histrows"
+    add(E.compare("seq|returning", [last_a, d_l, d_e, d_b, g_h, g_p, s_b], T, row_filter=has_h,
+                  pairs=[(g_h, d_e), (g_h, d_l), (g_p, d_l), (g_p, last_a), (s_b, d_b)]))
+    rg = ["routed__A__dlatt_specialists", "routed__A__gru_specialists"]
+    add(E.compare("routed_gru_all_lifters", rg, T, pairs=[(rg[1], rg[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)
