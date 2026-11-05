@@ -255,6 +255,29 @@ specialist was the lowest validation MAE, base included.
 Against the original specialists, the paired Δ for all lifters is −0.31 kg [−0.32, −0.30]. The best system's
 median absolute error is 6.9 kg; 65% of predictions fall within 10 kg and 89% within 20 kg.
 
+#### Follow-up: deep-learning architecture — embedding MLP (post-hoc)
+
+The embedding MLP gives each numeric input a learned periodic embedding (PLR: sin/cos of learned frequencies,
+then a per-feature linear layer and ReLU; Gorishniy et al., 2022) and each categorical a learned embedding table.
+A [256, 128] MLP sits on top. Training matches the plain MLP: L1 loss, Adam, validation early stopping. Settings
+were fixed in advance, with no search. Parameter counts are 135k for the all-lifter model and 194k with history.
+
+| Test MAE (kg), identical rows | Plain MLP | **Embedding MLP** | Huber LightGBM | Blend: LightGBM + plain MLP | **Blend: LightGBM + embedding MLP** |
+|---|---|---|---|---|---|
+| All-lifter model (386,613) | 10.29 | **10.23** | 10.20 | 10.16 | **10.14** |
+| Returning-lifter model (268,289) | 8.33 | **8.25** | 8.25 | 8.21 | **8.17** |
+
+- **Embeddings help the network:** −0.06 to −0.09 kg versus the plain MLP (paired CIs exclude 0).
+- **It now matches the best tree model.** With history it is tied (Δ −0.004 [−0.016, 0.008]); on all rows it is
+  0.025 kg behind.
+- **Blending gains more.** The two model types are now about equally accurate, so the LightGBM + embedding MLP
+  blend (w = 0.5, chosen on validation) beats the earlier blend by 0.03 kg.
+- **Best routed system:** **9.66 kg** for all lifters (Δ −0.025 [−0.030, −0.019]), 13.02 kg for first-timers,
+  and **8.17 kg** for returning lifters.
+
+Architecture changes how evenly the two model families perform, but not the overall level. As with the capacity
+check, the limit is the information in the inputs.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -363,6 +386,7 @@ prediction, not evidence about any lifter.
   2025; https://doras.dcu.ie/31743/). This models attempt success, a different target. The author list could not
   be extracted and is cited from the repository URL ("Darragh et al.").
 - Y. Romano, E. Patterson, E. Candès, "Conformalized Quantile Regression," NeurIPS 2019 (the calibration method used for ranges).
+- Y. Gorishniy, I. Rubachev, A. Babenko, "On Embeddings for Numerical Features in Tabular Deep Learning," NeurIPS 2022 (PLR embeddings).
 - G. Ke et al., "LightGBM: A Highly Efficient Gradient Boosting Decision Tree," NeurIPS 2017 (the library used here).
 
 No novelty is claimed beyond the combination reported: same-meet prediction with controlled ablations, past-only
@@ -375,8 +399,8 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/
 .venv/bin/pytest -q                                    # 51 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
-.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 7 LightGBM+MLP ensembles + 3 routed systems
+.venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP runs
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # 9 ensembles + 4 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```

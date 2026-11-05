@@ -133,6 +133,8 @@ ROUTED = {
                                         "ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows"),
     "routed__A__objective_specialists": ("ensemble__A__X_all-anyhist__bestobj_mlp",
                                          "ensemble__A__X_all-history_rich-anyhist__bestobj_mlp__histrows"),
+    "routed__A__embed_specialists": ("ensemble__A__X_all-anyhist__bestobj_embed",
+                                     "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows"),
 }
 
 
@@ -144,11 +146,15 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     root = artifacts_dir(cfg) / "runs"
     best = best_objective_runs(cfg)
     metas = []
-    mlps = {"X_all+anyhist": ("expanded__A__X_all-anyhist__mlp__s42", "ensemble__A__X_all-anyhist__bestobj_mlp"),
-            "X_all+history_rich+anyhist": ("expanded__A__X_all-history_rich-anyhist__mlp__histrows__s42",
-                                           "ensemble__A__X_all-history_rich-anyhist__bestobj_mlp__histrows")}
-    for fs, lgbm_id in best.items():
-        mlp_id, run_id = mlps[fs]
+    mlps = {"X_all+anyhist": [("expanded__A__X_all-anyhist__mlp__s42", "ensemble__A__X_all-anyhist__bestobj_mlp"),
+                              ("dl_arch__A__X_all-anyhist__embed_mlp__s42", "ensemble__A__X_all-anyhist__bestobj_embed")],
+            "X_all+history_rich+anyhist": [
+                ("expanded__A__X_all-history_rich-anyhist__mlp__histrows__s42",
+                 "ensemble__A__X_all-history_rich-anyhist__bestobj_mlp__histrows"),
+                ("dl_arch__A__X_all-history_rich-anyhist__embed_mlp__histrows__s42",
+                 "ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows")]}
+    jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
+    for fs, lgbm_id, mlp_id, run_id in jobs:
         if not (root / mlp_id / "done.json").exists():
             continue
         m, w, tuning = _blend(root, lgbm_id, mlp_id)

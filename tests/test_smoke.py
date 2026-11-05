@@ -19,7 +19,7 @@ def test_synthetic_pipeline_end_to_end():
     assert len(runs) == len(out["runs"]) + len(out["ensembles"])
     from deadlift_prediction.ensemble import PAIRS
     from deadlift_prediction.ensemble import ROUTED
-    assert len(out["ensembles"]) == len(PAIRS) + 2 + len(ROUTED)
+    assert len(out["ensembles"]) == len(PAIRS) + 4 + len(ROUTED)
     assert {"routed_all_lifters", "routed_first_timers", "routed_returning"} <= set(m["comparison"])
     assert any(c.startswith("expanded_") for c in m["comparison"])
     assert any(c.startswith("ensemble|") for c in m["comparison"])

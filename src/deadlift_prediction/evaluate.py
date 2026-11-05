@@ -265,8 +265,11 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
         mlp = rid("expanded", "A", fs, "mlp", s0, hist=hist)
         emb = rid("dl_arch", "A", fs, "embed_mlp", s0, hist=hist)
         best_ens = "ensemble__A__" + fs.replace("+", "-") + "__bestobj_mlp" + ("__histrows" if hist else "")
-        add(E.compare(f"dl_arch|{fs}", [base_l, huber, mlp, emb, best_ens], T, row_filter=has_h if hist else None,
-                      pairs=[(emb, mlp), (emb, huber), (emb, best_ens)]))
+        emb_ens = best_ens.replace("bestobj_mlp", "bestobj_embed")
+        add(E.compare(f"dl_arch|{fs}", [base_l, huber, mlp, emb, best_ens, emb_ens], T, row_filter=has_h if hist else None,
+                      pairs=[(emb, mlp), (emb, huber), (emb, best_ens), (emb_ens, best_ens)]))
+    add(E.compare("routed_embed_all_lifters", ["routed__A__objective_specialists", "routed__A__embed_specialists"], T,
+                  pairs=[("routed__A__embed_specialists", "routed__A__objective_specialists")]))
 
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
