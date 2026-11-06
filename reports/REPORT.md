@@ -349,6 +349,64 @@ other-lifter meets. There are two variants:
   for returning lifters. First-timers stay at 13.03 kg because they have no sequence.
 - **Training cost:** 81–85k parameters, about 15 s per epoch on CPU, 13–20 epochs.
 
+#### Follow-up: hyperparameter search, seed averaging, tabular ResNet (post-hoc)
+
+**Search.** A bounded random search, decided on validation only:
+
+| Target | Trials |
+|---|---|
+| Huber LightGBM, each specialist | 16 |
+| Embedding MLP, each specialist | 8 |
+| Sequence-only GRU | 6 |
+
+Trials trained on a fixed 30% sample of training lifters, drawn by hashed identity, and were scored on the full
+validation set. Each winner was refit on the full training partition. The best-to-worst spread across trials was
+0.06–0.12 kg for LightGBM and up to 0.6 kg for the networks. The winning settings were:
+
+- LightGBM: 255–511 leaves, learning rate 0.03–0.05, 60% feature subsampling, Huber δ 10–20 kg.
+- GRU: hidden size 128 over the last **12** meets.
+
+All settings are in `artifacts/full/hpo/*.json`.
+
+**Seed averaging.** Each tuned model was refit with seeds 43 and 44, and predictions were averaged per model. Both
+LightGBM winners subsample features, so their seeds also differ. Single-seed spread was small for LightGBM and
+larger for the networks; the GRU ranged from 8.20 to 8.35 kg on validation.
+
+**Tabular ResNet** (Gorishniy et al., 2021): a linear layer, 3 residual blocks
+[BN → Linear(256→512) → ReLU → Dropout → Linear(512→256)], then BN → ReLU → Linear. Default settings, not tuned.
+
+| Test MAE (kg), identical rows | Untuned | Tuned (1 seed) | 3-seed average |
+|---|---|---|---|
+| All-lifter LightGBM (386,613) | 10.15 | 10.11 | 10.10 |
+| All-lifter embedding MLP | 10.16 | 10.10 | **10.02** |
+| All-lifter ResNet | **10.06** | — | — |
+| Returning-lifter LightGBM (268,289) | 8.21 | 8.15 | 8.13 |
+| Returning-lifter embedding MLP | 8.26 | 8.19 | **8.12** |
+| Returning-lifter GRU, sequence-only | 8.23 | 8.16 | **8.12** |
+| Returning-lifter ResNet | **8.16** | — | — |
+
+- **Tuning gains are small but real.** They are −0.03 to −0.07 kg per model, and every paired CI excludes 0.
+- **Seed averaging helps the networks most** (−0.05 to −0.08 kg) and LightGBM least (−0.01 to −0.02 kg).
+- **The untuned ResNet is the strongest single network,** about 0.1 kg better than the untuned embedding MLP on both
+  specialists.
+- **No single model wins.** After averaging, LightGBM, the embedding MLP, and the GRU all land within 0.02 kg of each
+  other with history.
+
+| Best routed system (test) | Before | Tuned | + seed averaging | **+ ResNet (final)** |
+|---|---|---|---|---|
+| All lifters (386,613 / 118,000) | 9.62 | 9.57 | 9.56 | **9.55** [9.50, 9.59] |
+| First-timers (118,324) | 13.03 | 13.00 | 12.98 | **12.98** |
+| Returning lifters (268,289) | 8.12 | 8.05 | 8.05 | **8.03** |
+
+The final system is a validation-weighted blend:
+
+- **First-timers:** LightGBM, embedding MLP, and ResNet.
+- **Returning lifters:** LightGBM, embedding MLP, GRU, and ResNet.
+
+Against the previous best it improves by −0.08 kg for all lifters. The median absolute error is 6.75 kg; 65.5% of
+predictions fall within 10 kg and 89.0% within 20 kg. This is the last tuning step reported: each step since the
+expanded inputs has been worth 0.01–0.06 kg.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -460,6 +518,7 @@ prediction, not evidence about any lifter.
   be extracted and is cited from the repository URL ("Darragh et al.").
 - Y. Romano, E. Patterson, E. Candès, "Conformalized Quantile Regression," NeurIPS 2019 (the calibration method used for ranges).
 - Y. Gorishniy, I. Rubachev, A. Babenko, "On Embeddings for Numerical Features in Tabular Deep Learning," NeurIPS 2022 (PLR embeddings).
+- Y. Gorishniy, I. Rubachev, V. Khrulkov, A. Babenko, "Revisiting Deep Learning Models for Tabular Data," NeurIPS 2021 (tabular ResNet).
 - G. Ke et al., "LightGBM: A Highly Efficient Gradient Boosting Decision Tree," NeurIPS 2017 (the library used here).
 
 No novelty is claimed beyond the combination reported: same-meet prediction with controlled ablations, past-only
@@ -469,11 +528,12 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 57 tests
+.venv/bin/pytest -q                                    # 59 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
-.venv/bin/deadlift ensemble  --config configs/default.yaml   # 12 ensembles + 6 routed systems
+.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet
+.venv/bin/deadlift ensemble  --config configs/default.yaml   # blends, seed averages, and 8 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
 ```
