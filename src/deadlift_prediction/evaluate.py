@@ -352,6 +352,21 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_final2_first_timers", r2, T, row_filter=no_h, pairs=[(r2[1], r2[0])]))
     add(E.compare("routed_final2_returning", r2, T, row_filter=has_h, pairs=[(r2[1], r2[0])]))
 
+    # 17. follow-up: CatBoost vs LightGBM (same feature sets) and the final3 system
+    from .ensemble import CATBOOST_RUNS
+    for key, hist in [("all", False), ("ret", True)]:
+        lg = "tuned__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo" if hist else "tuned__A__X_all-anyhist-dlatt__lightgbm__hpo"
+        lg_raw = "dlatt__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows" if hist else "dlatt__A__X_all-anyhist-dlatt__lightgbm"
+        f2 = "ensemble__A__final2_ret__histrows" if hist else "ensemble__A__final2_all"
+        f3 = "ensemble__A__final3_ret__histrows" if hist else "ensemble__A__final3_all"
+        cb = CATBOOST_RUNS[key]
+        add(E.compare(f"catboost|{'returning' if hist else 'all_rows'}", [lg_raw, lg, cb, f2, f3], T, row_filter=has_h if hist else None,
+                      pairs=[(cb, lg_raw), (cb, lg), (f3, f2)]))
+    r3 = ["routed__A__final2_specialists", "routed__A__final3_specialists"]
+    add(E.compare("routed_final3_all_lifters", r3, T, pairs=[(r3[1], r3[0])]))
+    add(E.compare("routed_final3_first_timers", r3, T, row_filter=no_h, pairs=[(r3[1], r3[0])]))
+    add(E.compare("routed_final3_returning", r3, T, row_filter=has_h, pairs=[(r3[1], r3[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

@@ -30,7 +30,7 @@ def test_ratio_least_squares_through_origin_by_sex(cfg):
     assert np.allclose(m.predict(unseen), 100 * m.pooled)
 
 
-@pytest.mark.parametrize("kind", ["linear", "lightgbm"])
+@pytest.mark.parametrize("kind", ["linear", "lightgbm", "catboost"])
 def test_roundtrip_and_unseen_categories(kind, cfg, tmp_path):
     df, y = _data()
     m = build_model(kind, "E_plus_federation", cfg, 42).fit(df[:400], y[:400], df[400:500], y[400:500])

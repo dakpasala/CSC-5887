@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf | catboost
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -169,7 +169,11 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
         runs += [RunSpec("resnet", "A", fs, "resnet_mlp", seed=sd, history_only=hist) for sd in extra]
 
-    # 15. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 15. Follow-up: CatBoost on the two best specialist feature sets.
+    for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+        runs.append(RunSpec("catboost", "A", fs, "catboost", history_only=hist))
+
+    # 16. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,

@@ -142,7 +142,15 @@ ROUTED = {
     "routed__A__seedavg_specialists": ("ensemble__A__seedavg_all", "ensemble__A__seedavg_ret__histrows"),
     "routed__A__final_specialists": ("ensemble__A__final_all", "ensemble__A__final_ret__histrows"),
     "routed__A__final2_specialists": ("ensemble__A__final2_all", "ensemble__A__final2_ret__histrows"),
+    "routed__A__final3_specialists": ("ensemble__A__final3_all", "ensemble__A__final3_ret__histrows"),
 }
+
+CATBOOST_RUNS = {"all": "catboost__A__X_all-anyhist-dlatt__catboost",
+                 "ret": "catboost__A__X_all-history_rich-anyhist-dlatt__catboost__histrows"}
+FINAL3_BLENDS = [
+    ("ensemble__A__final2_all", CATBOOST_RUNS["all"], "ensemble__A__final3_all"),
+    ("ensemble__A__final2_ret__histrows", CATBOOST_RUNS["ret"], "ensemble__A__final3_ret__histrows"),
+]
 
 # Seed-averaged ResNets (seed 42 + extra seeds) and the sequence Transformer, blended on top
 # of the seed-averaged tuned blends.
@@ -255,7 +263,7 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     # Later blends may consume earlier ones (SEQ_BLENDS uses a DLATT blend), so
     # existence is checked inside the loop, in order.
     jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS + SEEDAVG_BLENDS
-                                                                         + FINAL2_BLENDS]
+                                                                         + FINAL2_BLENDS + FINAL3_BLENDS]
     for fs, lgbm_id, mlp_id, run_id in jobs:
         if not ((root / lgbm_id / "done.json").exists() and (root / mlp_id / "done.json").exists()):
             continue

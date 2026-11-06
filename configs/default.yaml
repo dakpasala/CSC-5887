@@ -72,6 +72,15 @@ models:
     d_embedding: 16
     d_cat: 8
     device: auto
+  catboost:                        # follow-up: CatBoost with native categoricals
+    loss: huber
+    huber_delta: 10.0
+    learning_rate: 0.08
+    depth: 8
+    l2_leaf_reg: 3.0
+    border_count: 254
+    iterations: 6000
+    od_wait: 100
   seq_transformer:                 # sequence follow-up: attention over past meets
     seq_len: 16
     d_model: 64

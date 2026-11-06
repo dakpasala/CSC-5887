@@ -27,6 +27,10 @@ models:
     max_epochs: 3
     patience: 2
     batch_size: 256
+  catboost:
+    iterations: 50
+    od_wait: 10
+    depth: 4
   seq_transformer:
     seq_len: 6
     max_epochs: 2
