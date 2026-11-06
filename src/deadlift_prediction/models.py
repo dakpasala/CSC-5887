@@ -679,8 +679,9 @@ class CatBoostModel(BaseModel):
     """CatBoost regression (follow-up). Numerics passed raw (NaN handled
     natively); categoricals passed as native CatBoost categorical features using
     the training-fitted codes (0 = unknown/infrequent/missing), so CatBoost's
-    ordered target statistics see only training rows. Huber loss (as the best
-    LightGBM), early stopping on validation MAE."""
+    ordered target statistics see only training rows. Loss from config (MAE by
+    default; CatBoost's Huber diverges with Newton leaf steps), early stopping on
+    validation MAE."""
 
     kind = "catboost"
 
@@ -697,12 +698,13 @@ class CatBoostModel(BaseModel):
 
         self._prep(train)
         p = self.params
-        loss = f"Huber:delta={p['huber_delta']}" if p.get("loss", "huber") == "huber" else "RMSE"
+        loss = {"huber": f"Huber:delta={p.get('huber_delta', 10.0)}", "rmse": "RMSE", "mae": "MAE"}[p.get("loss", "huber")]
         self.model = CatBoostRegressor(
             loss_function=loss, eval_metric="MAE", iterations=p["iterations"], learning_rate=p["learning_rate"],
             depth=p["depth"], l2_leaf_reg=p["l2_leaf_reg"], border_count=p.get("border_count", 254),
             random_seed=self.seed, thread_count=os.cpu_count(), od_type="Iter", od_wait=p["od_wait"],
             use_best_model=True, verbose=0, allow_writing_files=False,
+            **{k: p[k] for k in ["leaf_estimation_method", "boost_from_average"] if k in p},
         )
         t0 = time.time()
         self.model.fit(self._pool(train, y_train), eval_set=self._pool(val, y_val))

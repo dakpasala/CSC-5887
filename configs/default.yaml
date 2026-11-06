@@ -73,8 +73,10 @@ models:
     d_cat: 8
     device: auto
   catboost:                        # follow-up: CatBoost with native categoricals
-    loss: huber
-    huber_delta: 10.0
+    # MAE loss: CatBoost's Huber diverged (Newton leaf steps; zero curvature outside delta)
+    # or learned far too slowly (gradient steps) on a 200k-row validation check.
+    loss: mae
+    boost_from_average: true
     learning_rate: 0.08
     depth: 8
     l2_leaf_reg: 3.0

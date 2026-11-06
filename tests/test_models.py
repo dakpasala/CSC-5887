@@ -40,6 +40,7 @@ def test_roundtrip_and_unseen_categories(kind, cfg, tmp_path):
     unseen.loc[unseen.index[40:50], "Sex"] = None
     p1 = m.predict(unseen)
     assert np.isfinite(p1).all()
+    assert np.mean(np.abs(p1 - y[500:])) < 60  # catches divergent fits, not just NaNs
     m.save(tmp_path / "m.pkl")
     p2 = BaseModel.load(tmp_path / "m.pkl").predict(unseen)
     np.testing.assert_allclose(p1, p2)
