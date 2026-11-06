@@ -407,6 +407,40 @@ Against the previous best it improves by −0.08 kg for all lifters. The median 
 predictions fall within 10 kg and 89.0% within 20 kg. This is the last tuning step reported: each step since the
 expanded inputs has been worth 0.01–0.06 kg.
 
+#### Follow-up: sequence Transformer and ResNet seed averaging (post-hoc)
+
+**Sequence Transformer.** A 2-layer Transformer encoder (d_model 64, 4 heads, feed-forward 128, learned position
+embeddings) reads the lifter's last 16 past meets. It uses the same leak-checked sequence inputs as the GRU, and
+padded steps are masked out of attention and pooling. Static inputs are same-meet only, as in the sequence-only
+GRU. Settings were fixed and untuned, with one seed. Validation MAE was noisy between epochs (for example 8.26 →
+9.12 → 8.40), which suggests the 1e-3 learning rate is high for attention. Training took 34 minutes, about 9× the
+GRU's time per epoch.
+
+**ResNet seed averaging.** Each ResNet was refit with seeds 43 and 44, and predictions were averaged per specialist.
+
+| Test MAE (kg), identical rows | Single model | 3-seed average |
+|---|---|---|
+| Returning lifters (268,289): sequence Transformer | 8.20 | — |
+| … tuned GRU | 8.16 | **8.12** |
+| … ResNet | 8.16 | **8.07** |
+| All lifters (386,613): ResNet | 10.06 | **10.05** |
+
+- **The Transformer did not beat the GRU.** It is 0.044 kg behind the tuned single GRU (CI [0.031, 0.055]) and
+  0.089 kg behind the seed-averaged GRU. Attention over a longer history is not better here than a recurrent
+  summary of the last 12 meets.
+- **The ResNet's earlier win was partly a lucky seed.** All-lifter seeds ranged from 10.10 to 10.26 kg on
+  validation, and averaging three seeds gains only 0.013 kg over seed 42. With history, seeds were steadier and
+  averaging gives the **best single model type for returning lifters**, 8.07 kg (Δ −0.094 [−0.101, −0.087]).
+- **Final system ("final2"):**
+  - All lifters: **9.54 kg** [9.49, 9.58], Δ −0.008 [−0.011, −0.006] versus the previous system.
+  - Returning lifters: **8.02 kg**, Δ −0.012.
+  - First-timers: 12.98 kg, Δ +0.002, unchanged.
+  - Blend: the seed-averaged ResNet is added to both specialists, and the Transformer gets weight 0.25 for
+    returning lifters.
+  - The median absolute error stays 6.75 kg; 65.6% of predictions fall within 10 kg and 89.0% within 20 kg.
+
+This step was worth less than 0.01 kg overall. The pipeline has clearly reached diminishing returns.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -464,6 +498,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Predicting the deadlift-to-squat ratio will help."** It did not (+0.0 to +0.1 kg); the Huber loss on kg did help slightly (−0.1 kg).
 - **"Previous meets' deadlift attempts will cut error by 0.1–0.3 kg."** They cut it by 0.02 kg overall (0.05–0.07 kg per single model).
 - **"A sequence model will find signal the summary features miss."** It did not beat them, but a GRU on raw meet sequences matched them (8.23 vs 8.21 kg) without any hand-built history features.
+- **"Attention over a longer meet history will beat the GRU."** It did not (8.20 vs 8.16 kg single-seed; 8.12 kg seed-averaged GRU).
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -532,7 +567,7 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
-.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet
+.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet --experiment seqtf
 .venv/bin/deadlift ensemble  --config configs/default.yaml   # blends, seed averages, and 8 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
