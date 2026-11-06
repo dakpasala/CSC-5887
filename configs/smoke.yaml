@@ -27,6 +27,11 @@ models:
     max_epochs: 3
     patience: 2
     batch_size: 256
+  seq_transformer:
+    seq_len: 6
+    max_epochs: 2
+    patience: 1
+    batch_size: 256
   resnet_mlp:
     max_epochs: 3
     patience: 2

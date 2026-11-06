@@ -434,6 +434,7 @@ class GRUModel(BaseModel):
     so nothing in them is fitted on non-training rows."""
 
     kind = "gru"
+    SELECTED_KEYS = ["seq_len", "gru_hidden", "static_hidden", "hidden", "dropout", "lr", "batch_size"]
 
     def _inputs(self, df):
         import torch
@@ -507,7 +508,7 @@ class GRUModel(BaseModel):
                 total += loss.item() * len(idx)
             score = mae(y_val, self._forward(net, va))
             self.tuning.append({"epoch": epoch, "train_loss": total / len(perm), "val_mae": score, "seconds": time.time() - t0})
-            print(f"    gru epoch {epoch}: val MAE {score:.3f} ({time.time() - t0:.0f}s)", flush=True)
+            print(f"    {self.kind} epoch {epoch}: val MAE {score:.3f} ({time.time() - t0:.0f}s)", flush=True)
             if score < best[0] - 1e-6:
                 best, bad = (score, copy.deepcopy(net.state_dict()), epoch), 0
             else:
@@ -516,7 +517,7 @@ class GRUModel(BaseModel):
                     break
         net.load_state_dict(best[1])
         self.net = net.cpu().eval()
-        self.selected = {k: p[k] for k in ["seq_len", "gru_hidden", "static_hidden", "hidden", "dropout", "lr", "batch_size"]}
+        self.selected = {k: p[k] for k in self.SELECTED_KEYS}
         self.selected.update({"best_epoch": best[2], "epochs_run": len(self.tuning), "loss": "l1",
                               "parameters": int(sum(t.numel() for t in self.net.parameters())), "device": device,
                               "sequence": "last seq_len lifter-days of any-event deadlift history, strictly earlier"})
@@ -674,15 +675,62 @@ class ResNetMLPModel(BaseModel):
             self.net = net.eval()
 
 
+class SeqTransformerModel(GRUModel):
+    """Transformer encoder over the same past-meet sequences as GRUModel
+    (sequence follow-up). Each step is projected to d_model and given a learned
+    position embedding; padded steps are masked out of attention and out of the
+    masked-mean pooling. Static features, head, training, and serialization are
+    inherited from GRUModel."""
+
+    kind = "seq_transformer"
+    SELECTED_KEYS = ["seq_len", "d_model", "n_heads", "n_layers", "d_ff", "static_hidden", "hidden", "dropout", "lr", "batch_size"]
+
+    def _build(self, n_static: int):
+        import torch
+        from torch import nn
+
+        from .features import SEQ_STEP_FEATURES
+
+        p = self.params
+        real = SEQ_STEP_FEATURES.index("is_real")
+
+        class Net(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.proj = nn.Linear(len(SEQ_STEP_FEATURES), p["d_model"])
+                self.pos = nn.Parameter(torch.zeros(p["seq_len"], p["d_model"]))
+                layer = nn.TransformerEncoderLayer(p["d_model"], p["n_heads"], p["d_ff"], p["dropout"], batch_first=True)
+                self.enc = nn.TransformerEncoder(layer, p["n_layers"], enable_nested_tensor=False)
+                self.static = nn.Sequential(nn.Linear(n_static, p["static_hidden"]), nn.ReLU())
+                layers, width = [], p["d_model"] + p["static_hidden"]
+                for h in p["hidden"]:
+                    layers += [nn.Linear(width, h), nn.ReLU()]
+                    if p.get("dropout"):
+                        layers.append(nn.Dropout(p["dropout"]))
+                    width = h
+                layers.append(nn.Linear(width, 1))
+                self.head = nn.Sequential(*layers)
+
+            def forward(self, seq, static):
+                valid = seq[..., real] > 0.5                        # (B, L)
+                valid[:, -1] |= ~valid.any(dim=1)                   # never fully masked (avoids NaN attention)
+                z = self.enc(self.proj(seq) + self.pos, src_key_padding_mask=~valid)
+                w = valid.unsqueeze(-1).float()
+                pooled = (z * w).sum(1) / w.sum(1).clamp(min=1.0)
+                return self.head(torch.cat([pooled, self.static(static)], dim=1)).squeeze(1)
+
+        return Net()
+
+
 MODEL_CLASSES = {c.kind: c for c in [RatioModel, LastDeadliftModel, LinearModel, LightGBMModel, MLPModel, EmbedMLPModel,
-                                     GRUModel, ResNetMLPModel]}
-TORCH_MODELS = {"mlp", "embed_mlp", "gru", "resnet_mlp"}
+                                     GRUModel, ResNetMLPModel, SeqTransformerModel]}
+TORCH_MODELS = {"mlp", "embed_mlp", "gru", "resnet_mlp", "seq_transformer"}
 
 
 def build_model(kind: str, feature_set: str, cfg: dict, seed: int, overrides: dict | None = None) -> BaseModel:
     params = dict(cfg["models"].get(kind, {}))
     params.update(overrides or {})
-    if kind == "gru":
+    if kind in ("gru", "seq_transformer"):
         from .config import processed_dir
 
         params.setdefault("seq_table", str(processed_dir(cfg) / "seq_table.parquet"))

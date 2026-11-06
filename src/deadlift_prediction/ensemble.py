@@ -141,7 +141,18 @@ ROUTED = {
     "routed__A__tuned_specialists": ("ensemble__A__tuned_all", "ensemble__A__tuned_ret__histrows"),
     "routed__A__seedavg_specialists": ("ensemble__A__seedavg_all", "ensemble__A__seedavg_ret__histrows"),
     "routed__A__final_specialists": ("ensemble__A__final_all", "ensemble__A__final_ret__histrows"),
+    "routed__A__final2_specialists": ("ensemble__A__final2_all", "ensemble__A__final2_ret__histrows"),
 }
+
+# Seed-averaged ResNets (seed 42 + extra seeds) and the sequence Transformer, blended on top
+# of the seed-averaged tuned blends.
+RESNET_AVG = {"resnet_all": ("X_all+anyhist+dlatt", False), "resnet_ret": ("X_all+history_rich+anyhist+dlatt", True)}
+SEQTF_RUN = "seqtf__A__X_all__seq_transformer__histrows__s42"
+FINAL2_BLENDS = [
+    ("ensemble__A__seedavg_all", "seedavg__A__resnet_all", "ensemble__A__final2_all"),
+    ("ensemble__A__seedavg_ret__histrows", "seedavg__A__resnet_ret", "ensemble__A__final2_ret_r__histrows"),
+    ("ensemble__A__final2_ret_r__histrows", SEQTF_RUN, "ensemble__A__final2_ret__histrows"),
+]
 
 
 def seedavg_id(name: str) -> str:
@@ -183,6 +194,18 @@ def build_seedavg(cfg: dict) -> list[dict]:
         out["yhat"] = np.mean([f.loc[out.index, "yhat"].to_numpy() for f in frames], axis=0)
         tmpl = read_json(root / ids[0] / "meta.json")
         meta = _write_pseudo_run(cfg, seedavg_id(name), out.reset_index(), tmpl,
+                                 {"averaged_runs": ids, "n_seeds": len(ids)}, ids, "seedavg")
+        print(f"{seedavg_id(name)}: {len(ids)} seed(s), val MAE {meta['val_metrics']['mae']:.3f}")
+        metas.append(meta)
+    for name, (fs, hist) in RESNET_AVG.items():
+        ids = [RunSpec("resnet", "A", fs, "resnet_mlp", seed=sd, history_only=hist).run_id for sd in [base_seed, *extra]]
+        ids = [r for r in ids if (root / r / "done.json").exists()]
+        if len(ids) < 2:
+            continue
+        frames = [pd.read_parquet(root / r / "predictions.parquet").set_index(["row_id", "partition"]) for r in ids]
+        out = frames[0].copy()
+        out["yhat"] = np.mean([f.loc[out.index, "yhat"].to_numpy() for f in frames], axis=0)
+        meta = _write_pseudo_run(cfg, seedavg_id(name), out.reset_index(), read_json(root / ids[0] / "meta.json"),
                                  {"averaged_runs": ids, "n_seeds": len(ids)}, ids, "seedavg")
         print(f"{seedavg_id(name)}: {len(ids)} seed(s), val MAE {meta['val_metrics']['mae']:.3f}")
         metas.append(meta)
@@ -231,7 +254,8 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
     jobs = [(fs, lgbm_id, mlp_id, run_id) for fs, lgbm_id in best.items() for mlp_id, run_id in mlps[fs]]
     # Later blends may consume earlier ones (SEQ_BLENDS uses a DLATT blend), so
     # existence is checked inside the loop, in order.
-    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS + SEEDAVG_BLENDS]
+    jobs += [(None, lgbm_id, mlp_id, run_id) for lgbm_id, mlp_id, run_id in DLATT_BLENDS + SEQ_BLENDS + TUNED_BLENDS + SEEDAVG_BLENDS
+                                                                         + FINAL2_BLENDS]
     for fs, lgbm_id, mlp_id, run_id in jobs:
         if not ((root / lgbm_id / "done.json").exists() and (root / mlp_id / "done.json").exists()):
             continue

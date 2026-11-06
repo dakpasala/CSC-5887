@@ -337,6 +337,21 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_final_first_timers", rs, T, row_filter=no_h, pairs=[(rs[2], rs[0])]))
     add(E.compare("routed_final_returning", rs, T, row_filter=has_h, pairs=[(rs[2], rs[0])]))
 
+    # 16. follow-up: sequence Transformer and seed-averaged ResNets
+    from .ensemble import SEQTF_RUN
+    gru_t = "tuned__A__X_all__gru__histrows__hpo__s42"
+    add(E.compare("seqtf|returning", [last_a, gru_t, seedavg_id("gru_ret"), SEQTF_RUN], T, row_filter=has_h,
+                  pairs=[(SEQTF_RUN, gru_t), (SEQTF_RUN, seedavg_id("gru_ret"))]))
+    for name, hist in [("resnet_all", False), ("resnet_ret", True)]:
+        fs = "X_all+history_rich+anyhist+dlatt" if hist else "X_all+anyhist+dlatt"
+        r42 = rid("resnet", "A", fs, "resnet_mlp", s0, hist=hist)
+        add(E.compare(f"resnet_seedavg|{name}", [r42, seedavg_id(name)], T, row_filter=has_h if hist else None,
+                      pairs=[(seedavg_id(name), r42)]))
+    r2 = ["routed__A__final_specialists", "routed__A__final2_specialists"]
+    add(E.compare("routed_final2_all_lifters", r2, T, pairs=[(r2[1], r2[0])]))
+    add(E.compare("routed_final2_first_timers", r2, T, row_filter=no_h, pairs=[(r2[1], r2[0])]))
+    add(E.compare("routed_final2_returning", r2, T, row_filter=has_h, pairs=[(r2[1], r2[0])]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)

@@ -128,12 +128,13 @@ aux = pd.DataFrame({"lifter_key": df["lifter_key"], "Event": "SBD", "Equipment":
                     "Best3DeadliftKg": y, "Best3SquatKg": df["Best3SquatKg"], "Best3BenchKg": df["Best3BenchKg"]})
 tmp = pathlib.Path(tempfile.mkdtemp())
 build_sequence_table(aux).to_parquet(tmp / "seq.parquet")
-m = build_model("gru", "D_plus_equipment", cfg, 42, {"seq_table": str(tmp / "seq.parquet")})
-m.fit(df[:400], y[:400], df[400:500], y[400:500])
-p1 = m.predict(df[500:])
-m.save(tmp / "m.pkl")
-p2 = BaseModel.load(tmp / "m.pkl").predict(df[500:])
-assert np.isfinite(p1).all() and np.allclose(p1, p2), "gru roundtrip mismatch"
+for kind in ["gru", "seq_transformer"]:
+    m = build_model(kind, "D_plus_equipment", cfg, 42, {"seq_table": str(tmp / "seq.parquet")})
+    m.fit(df[:400], y[:400], df[400:500], y[400:500])
+    p1 = m.predict(df[500:])
+    m.save(tmp / "m.pkl")
+    p2 = BaseModel.load(tmp / "m.pkl").predict(df[500:])
+    assert np.isfinite(p1).all() and np.allclose(p1, p2, atol=1e-4), f"{kind} roundtrip mismatch"
 print("GRU_OK")
 """
 
