@@ -441,6 +441,34 @@ GRU's time per epoch.
 
 This step was worth less than 0.01 kg overall. The pipeline has clearly reached diminishing returns.
 
+#### Follow-up: CatBoost (post-hoc)
+
+CatBoost (depth 8, learning rate 0.08, up to 6,000 trees, validation early stopping on MAE) ran on both specialist
+feature sets. Categorical inputs are passed as native CatBoost categoricals using the training-fitted codes, so
+its ordered target statistics see only training rows. Settings were fixed and untuned.
+
+**Failure first.** With Huber loss, the setting that worked best for LightGBM, CatBoost diverged:
+
+- All-lifter validation MAE was 6,765 kg on the full run, and 908 kg on a 200k-row check.
+- Cause: CatBoost's default Newton leaf steps blow up where Huber has zero curvature outside δ.
+- Gradient leaf steps converged too slowly (16.2 kg after 300 trees).
+- Fix: switch to MAE loss (10.5 kg in the same check).
+- The round-trip test previously checked only for non-finite predictions. It now also fails on divergent
+  predictions.
+
+| Test MAE (kg), identical rows | LightGBM (untuned) | LightGBM (tuned) | **CatBoost (untuned)** | Final blend without / with CatBoost |
+|---|---|---|---|---|
+| All lifters (386,613) | 10.15 | 10.11 | **10.12** | 10.00 / 10.00 |
+| Returning lifters (268,289) | 8.21 | 8.15 | **8.16** | 8.02 / 8.02 |
+
+- **CatBoost alone is competitive.** Untuned, it beats untuned LightGBM by 0.03–0.05 kg and ties the tuned
+  LightGBM (within 0.01 kg).
+- **It adds nothing to the blend.** The validation-chosen weight is 0, so its errors are already covered by the
+  existing tree and network models.
+- **The final system is unchanged:** 9.54 kg for all lifters, 12.98 kg for first-timers, 8.02 kg for returning
+  lifters.
+- **Cost:** about 40–45 minutes per specialist on CPU, roughly 10× LightGBM.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -499,6 +527,7 @@ still usually better without the field (3 of 4 equipment groups; THSPA/THSWPA).
 - **"Previous meets' deadlift attempts will cut error by 0.1–0.3 kg."** They cut it by 0.02 kg overall (0.05–0.07 kg per single model).
 - **"A sequence model will find signal the summary features miss."** It did not beat them, but a GRU on raw meet sequences matched them (8.23 vs 8.21 kg) without any hand-built history features.
 - **"Attention over a longer meet history will beat the GRU."** It did not (8.20 vs 8.16 kg single-seed; 8.12 kg seed-averaged GRU).
+- **"CatBoost's categorical handling will add something."** It tied tuned LightGBM alone and received weight 0 in the blend.
 - **"Federation is a strong signal."** It gives the smallest stage gain, −0.25 kg with LightGBM, and none for
   USAPL transfer.
 
@@ -563,11 +592,11 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 59 tests
+.venv/bin/pytest -q                                    # 60 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
-.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet --experiment seqtf
+.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet --experiment seqtf --experiment catboost
 .venv/bin/deadlift ensemble  --config configs/default.yaml   # blends, seed averages, and 8 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final

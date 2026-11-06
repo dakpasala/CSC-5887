@@ -32,7 +32,7 @@ deadlift summarize --config configs/default.yaml --final
 pytest -q
 ```
 
-`train` accepts `--experiment {ablation,history,chrono,transfer,capacity,history_rich,quantile,expanded,objective,dl_arch,dlatt,seq,tuned,resnet,seqtf}` (repeatable) and `--only <substring>`.
+`train` accepts `--experiment {ablation,history,chrono,transfer,capacity,history_rich,quantile,expanded,objective,dl_arch,dlatt,seq,tuned,resnet,seqtf,catboost}` (repeatable) and `--only <substring>`.
 
 ## Layout
 
@@ -60,5 +60,5 @@ pytest -q
 - [x] Package, configs, CLI, synthetic smoke pipeline, tests
 - [x] Snapshot registered: `openpowerlifting-2026-10-24-0fc10dd9.zip`, 4,054,260 data rows
 - [x] Subset (10% lifters): prepare + all 65 runs trained; validation-only tables in `reports/subset10/`
-- [x] Full-snapshot experiments: 73 runs + 6 capacity-check + 3 career-history follow-up runs + 3 ensembles + 4 quantile-range runs + 12 expanded-input runs + 8 loss/target runs (+ensembles and routed systems); + 2 embedding-MLP runs + 4 past-deadlift-attempt runs + 2 GRU sequence runs + 54-trial hyperparameter search, 10 extra seeds, 6 ResNets (3 seeds each), sequence Transformer; best test MAE 9.54 kg; validation then frozen test scoring
+- [x] Full-snapshot experiments: 73 runs + 6 capacity-check + 3 career-history follow-up runs + 3 ensembles + 4 quantile-range runs + 12 expanded-input runs + 8 loss/target runs (+ensembles and routed systems); + 2 embedding-MLP runs + 4 past-deadlift-attempt runs + 2 GRU sequence runs + 54-trial hyperparameter search, 10 extra seeds, 6 ResNets (3 seeds each), sequence Transformer, CatBoost; best test MAE 9.54 kg; validation then frozen test scoring
 - [x] Final report: [`reports/REPORT.md`](reports/REPORT.md) (tables in `reports/full/`)
