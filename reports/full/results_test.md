@@ -1270,6 +1270,240 @@ Paired MAE differences (a − b; negative = a better):
 |---|---|---|---|---|---|---|---|
 | test | routed · A · final3_specialists | routed · A · final2_specialists | 268289 | 64764 | 0.00 | 0.00 | 0.00 |
 
+## finalB|all — partition `test`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| routed · B · original_specialists | routed | routed | 402128 | 183630 | 9.59 | 9.55 | 9.63 | 11.01 | 6.11 | 0.95 |
+| routed · B · expanded_specialists | routed | routed | 402128 | 183630 | 9.35 | 9.31 | 9.39 | 10.64 | 5.92 | 0.95 |
+| routed · B · final_recipe | routed | routed | 402128 | 183630 | 9.11 | 9.07 | 9.14 | 10.43 | 5.77 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test | routed · B · final_recipe | routed · B · original_specialists | 402128 | 183630 | -0.48 | -0.50 | -0.47 |
+| test | routed · B · final_recipe | routed · B · expanded_specialists | 402128 | 183630 | -0.24 | -0.25 | -0.23 |
+
+## finalB|first_timers — partition `test`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| routed · B · original_specialists | routed | routed | 100859 | 100696 | 13.85 | 13.78 | 13.93 | 13.84 | 9.28 | 0.89 |
+| routed · B · expanded_specialists | routed | routed | 100859 | 100696 | 13.05 | 12.99 | 13.12 | 13.05 | 8.66 | 0.90 |
+| routed · B · final_recipe | routed | routed | 100859 | 100696 | 13.00 | 12.93 | 13.06 | 12.99 | 8.63 | 0.91 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test | routed · B · final_recipe | routed · B · original_specialists | 100859 | 100696 | -0.85 | -0.88 | -0.82 |
+| test | routed · B · final_recipe | routed · B · expanded_specialists | 100859 | 100696 | -0.06 | -0.07 | -0.04 |
+
+## finalB|returning — partition `test`
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| routed · B · original_specialists | routed | routed | 301269 | 125023 | 8.17 | 8.12 | 8.21 | 8.75 | 5.05 | 0.96 |
+| routed · B · expanded_specialists | routed | routed | 301269 | 125023 | 8.11 | 8.07 | 8.15 | 8.68 | 5.00 | 0.96 |
+| routed · B · final_recipe | routed | routed | 301269 | 125023 | 7.81 | 7.76 | 7.85 | 8.37 | 4.82 | 0.96 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test | routed · B · final_recipe | routed · B · original_specialists | 301269 | 125023 | -0.36 | -0.37 | -0.35 |
+| test | routed · B · final_recipe | routed · B · expanded_specialists | 301269 | 125023 | -0.30 | -0.31 | -0.29 |
+
+## finalC|Equipment=Single-ply — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Single-ply · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 147373 | 44780 | 16.00 | 15.83 | 16.17 | 15.58 | 9.44 | 0.87 |
+| transfer · C-Equipment-Single-ply · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 147373 | 44780 | 15.31 | 15.17 | 15.46 | 15.50 | 9.05 | 0.88 |
+| routed · C-Equipment-Single-ply · final_lgbm | routed | routed | 147373 | 44780 | 9.79 | 9.72 | 9.86 | 11.73 | 6.01 | 0.94 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Single-ply · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 239240 | 82600 | 14.17 | 14.08 | 14.27 | 14.16 | 8.30 | 0.90 |
+| transfer · C-Equipment-Single-ply · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 239240 | 82600 | 14.76 | 14.66 | 14.86 | 14.66 | 8.62 | 0.89 |
+| routed · C-Equipment-Single-ply · final_lgbm | routed | routed | 239240 | 82600 | 9.78 | 9.73 | 9.84 | 11.40 | 5.94 | 0.94 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Equipment-Single-ply · final_lgbm | transfer · C-Equipment-Single-ply · D_plus_equipment · lightgbm | 147373 | 44780 | -6.21 | -6.34 | -6.07 |
+| test_transfer | routed · C-Equipment-Single-ply · final_lgbm | transfer · C-Equipment-Single-ply · C_plus_demographics · lightgbm | 147373 | 44780 | -5.52 | -5.64 | -5.41 |
+| test_in_dist | routed · C-Equipment-Single-ply · final_lgbm | transfer · C-Equipment-Single-ply · D_plus_equipment · lightgbm | 239240 | 82600 | -4.39 | -4.47 | -4.32 |
+| test_in_dist | routed · C-Equipment-Single-ply · final_lgbm | transfer · C-Equipment-Single-ply · C_plus_demographics · lightgbm | 239240 | 82600 | -4.98 | -5.06 | -4.91 |
+
+## finalC|Equipment=Unlimited — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Unlimited · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 40208 | 9449 | 15.06 | 14.78 | 15.28 | 15.28 | 11.19 | 0.82 |
+| transfer · C-Equipment-Unlimited · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 40208 | 9449 | 13.14 | 12.90 | 13.34 | 13.40 | 9.82 | 0.87 |
+| routed · C-Equipment-Unlimited · final_lgbm | routed | routed | 40208 | 9449 | 7.50 | 7.41 | 7.60 | 8.89 | 5.66 | 0.95 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Unlimited · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 346405 | 111120 | 14.39 | 14.31 | 14.48 | 14.20 | 8.27 | 0.90 |
+| transfer · C-Equipment-Unlimited · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 346405 | 111120 | 14.97 | 14.88 | 15.05 | 14.64 | 8.56 | 0.89 |
+| routed · C-Equipment-Unlimited · final_lgbm | routed | routed | 346405 | 111120 | 9.90 | 9.86 | 9.94 | 11.52 | 5.90 | 0.94 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Equipment-Unlimited · final_lgbm | transfer · C-Equipment-Unlimited · D_plus_equipment · lightgbm | 40208 | 9449 | -7.56 | -7.82 | -7.34 |
+| test_transfer | routed · C-Equipment-Unlimited · final_lgbm | transfer · C-Equipment-Unlimited · C_plus_demographics · lightgbm | 40208 | 9449 | -5.64 | -5.89 | -5.46 |
+| test_in_dist | routed · C-Equipment-Unlimited · final_lgbm | transfer · C-Equipment-Unlimited · D_plus_equipment · lightgbm | 346405 | 111120 | -4.49 | -4.57 | -4.42 |
+| test_in_dist | routed · C-Equipment-Unlimited · final_lgbm | transfer · C-Equipment-Unlimited · C_plus_demographics · lightgbm | 346405 | 111120 | -5.06 | -5.14 | -4.99 |
+
+## finalC|Equipment=Wraps — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Wraps · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 31414 | 15236 | 22.22 | 21.83 | 22.64 | 21.14 | 11.05 | 0.78 |
+| transfer · C-Equipment-Wraps · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 31414 | 15236 | 17.00 | 16.69 | 17.28 | 16.70 | 9.36 | 0.86 |
+| routed · C-Equipment-Wraps · final_lgbm | routed | routed | 31414 | 15236 | 12.50 | 12.34 | 12.66 | 13.95 | 7.03 | 0.91 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Wraps · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 355199 | 109462 | 13.92 | 13.83 | 14.01 | 13.93 | 8.21 | 0.90 |
+| transfer · C-Equipment-Wraps · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 355199 | 109462 | 14.46 | 14.37 | 14.55 | 14.39 | 8.50 | 0.90 |
+| routed · C-Equipment-Wraps · final_lgbm | routed | routed | 355199 | 109462 | 9.50 | 9.46 | 9.55 | 11.23 | 5.79 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Equipment-Wraps · final_lgbm | transfer · C-Equipment-Wraps · D_plus_equipment · lightgbm | 31414 | 15236 | -9.72 | -10.06 | -9.43 |
+| test_transfer | routed · C-Equipment-Wraps · final_lgbm | transfer · C-Equipment-Wraps · C_plus_demographics · lightgbm | 31414 | 15236 | -4.49 | -4.73 | -4.27 |
+| test_in_dist | routed · C-Equipment-Wraps · final_lgbm | transfer · C-Equipment-Wraps · D_plus_equipment · lightgbm | 355199 | 109462 | -4.42 | -4.48 | -4.34 |
+| test_in_dist | routed · C-Equipment-Wraps · final_lgbm | transfer · C-Equipment-Wraps · C_plus_demographics · lightgbm | 355199 | 109462 | -4.96 | -5.04 | -4.89 |
+
+## finalC|Equipment=Multi-ply — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Multi-ply · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 7369 | 3006 | 22.62 | 21.83 | 23.54 | 21.22 | 10.94 | 0.75 |
+| transfer · C-Equipment-Multi-ply · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 7369 | 3006 | 25.72 | 24.76 | 26.76 | 23.73 | 12.56 | 0.69 |
+| routed · C-Equipment-Multi-ply · final_lgbm | routed | routed | 7369 | 3006 | 14.52 | 14.11 | 14.98 | 15.84 | 7.58 | 0.86 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Equipment-Multi-ply · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 379244 | 116572 | 13.95 | 13.88 | 14.04 | 13.96 | 8.23 | 0.90 |
+| transfer · C-Equipment-Multi-ply · C_plus_demographics · lightgbm | lightgbm | C_plus_demographics | 379244 | 116572 | 14.46 | 14.38 | 14.55 | 14.40 | 8.49 | 0.90 |
+| routed · C-Equipment-Multi-ply · final_lgbm | routed | routed | 379244 | 116572 | 9.56 | 9.52 | 9.60 | 11.29 | 5.84 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Equipment-Multi-ply · final_lgbm | transfer · C-Equipment-Multi-ply · D_plus_equipment · lightgbm | 7369 | 3006 | -8.10 | -8.73 | -7.47 |
+| test_transfer | routed · C-Equipment-Multi-ply · final_lgbm | transfer · C-Equipment-Multi-ply · C_plus_demographics · lightgbm | 7369 | 3006 | -11.19 | -12.03 | -10.32 |
+| test_in_dist | routed · C-Equipment-Multi-ply · final_lgbm | transfer · C-Equipment-Multi-ply · D_plus_equipment · lightgbm | 379244 | 116572 | -4.40 | -4.47 | -4.33 |
+| test_in_dist | routed · C-Equipment-Multi-ply · final_lgbm | transfer · C-Equipment-Multi-ply · C_plus_demographics · lightgbm | 379244 | 116572 | -4.90 | -4.98 | -4.83 |
+
+## finalC|Federation=THSPA — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-THSPA · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 69477 | 16983 | 19.97 | 19.74 | 20.20 | 20.22 | 12.21 | 0.59 |
+| transfer · C-Federation-THSPA · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 69477 | 16983 | 18.42 | 18.20 | 18.62 | 18.65 | 11.24 | 0.64 |
+| routed · C-Federation-THSPA · final_lgbm | routed | routed | 69477 | 16983 | 10.37 | 10.27 | 10.48 | 12.76 | 6.54 | 0.86 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-THSPA · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 317136 | 102851 | 13.99 | 13.88 | 14.07 | 13.87 | 8.20 | 0.91 |
+| transfer · C-Federation-THSPA · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 317136 | 102851 | 14.21 | 14.12 | 14.32 | 14.13 | 8.34 | 0.91 |
+| routed · C-Federation-THSPA · final_lgbm | routed | routed | 317136 | 102851 | 9.83 | 9.78 | 9.88 | 11.55 | 5.96 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Federation-THSPA · final_lgbm | transfer · C-Federation-THSPA · E_plus_federation · lightgbm | 69477 | 16983 | -9.59 | -9.81 | -9.35 |
+| test_transfer | routed · C-Federation-THSPA · final_lgbm | transfer · C-Federation-THSPA · D_plus_equipment · lightgbm | 69477 | 16983 | -8.04 | -8.26 | -7.81 |
+| test_in_dist | routed · C-Federation-THSPA · final_lgbm | transfer · C-Federation-THSPA · E_plus_federation · lightgbm | 317136 | 102851 | -4.16 | -4.23 | -4.09 |
+| test_in_dist | routed · C-Federation-THSPA · final_lgbm | transfer · C-Federation-THSPA · D_plus_equipment · lightgbm | 317136 | 102851 | -4.39 | -4.46 | -4.31 |
+
+## finalC|Federation=USAPL — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-USAPL · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 43006 | 17917 | 14.34 | 14.13 | 14.54 | 14.21 | 8.25 | 0.89 |
+| transfer · C-Federation-USAPL · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 43006 | 17917 | 14.38 | 14.17 | 14.57 | 14.26 | 8.24 | 0.89 |
+| routed · C-Federation-USAPL · final_lgbm | routed | routed | 43006 | 17917 | 10.21 | 10.07 | 10.33 | 11.61 | 6.06 | 0.94 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-USAPL · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 343607 | 105792 | 13.79 | 13.72 | 13.88 | 13.73 | 8.13 | 0.91 |
+| transfer · C-Federation-USAPL · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 343607 | 105792 | 14.06 | 13.98 | 14.14 | 14.04 | 8.29 | 0.90 |
+| routed · C-Federation-USAPL · final_lgbm | routed | routed | 343607 | 105792 | 9.58 | 9.54 | 9.63 | 11.30 | 5.85 | 0.95 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Federation-USAPL · final_lgbm | transfer · C-Federation-USAPL · E_plus_federation · lightgbm | 43006 | 17917 | -4.14 | -4.28 | -3.97 |
+| test_transfer | routed · C-Federation-USAPL · final_lgbm | transfer · C-Federation-USAPL · D_plus_equipment · lightgbm | 43006 | 17917 | -4.17 | -4.33 | -4.01 |
+| test_in_dist | routed · C-Federation-USAPL · final_lgbm | transfer · C-Federation-USAPL · E_plus_federation · lightgbm | 343607 | 105792 | -4.20 | -4.28 | -4.15 |
+| test_in_dist | routed · C-Federation-USAPL · final_lgbm | transfer · C-Federation-USAPL · D_plus_equipment · lightgbm | 343607 | 105792 | -4.47 | -4.55 | -4.42 |
+
+## finalC|Federation=THSWPA — partition `test_transfer, test_in_dist`
+
+**test_transfer**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 42326 | 8254 | 12.70 | 12.51 | 12.88 | 13.06 | 12.53 | 0.58 |
+| transfer · C-Federation-THSWPA · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 42326 | 8254 | 12.28 | 12.09 | 12.45 | 12.62 | 12.08 | 0.60 |
+| routed · C-Federation-THSWPA · final_lgbm | routed | routed | 42326 | 8254 | 6.71 | 6.65 | 6.77 | 8.19 | 6.76 | 0.85 |
+
+**test_in_dist**
+
+| label | model | feature_set | rows | lifters | mae | mae_ci_low | mae_ci_high | lifter_avg_mae | mape | r2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | lightgbm | E_plus_federation | 344287 | 110287 | 14.40 | 14.33 | 14.49 | 14.07 | 8.07 | 0.89 |
+| transfer · C-Federation-THSWPA · D_plus_equipment · lightgbm | lightgbm | D_plus_equipment | 344287 | 110287 | 14.67 | 14.59 | 14.75 | 14.37 | 8.22 | 0.88 |
+| routed · C-Federation-THSWPA · final_lgbm | routed | routed | 344287 | 110287 | 10.10 | 10.05 | 10.14 | 11.67 | 5.88 | 0.93 |
+
+Paired MAE differences (a − b; negative = a better):
+
+| partition | a | b | rows | lifters | mae_diff_a_minus_b | ci_low | ci_high |
+|---|---|---|---|---|---|---|---|
+| test_transfer | routed · C-Federation-THSWPA · final_lgbm | transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | 42326 | 8254 | -5.99 | -6.14 | -5.83 |
+| test_transfer | routed · C-Federation-THSWPA · final_lgbm | transfer · C-Federation-THSWPA · D_plus_equipment · lightgbm | 42326 | 8254 | -5.57 | -5.72 | -5.41 |
+| test_in_dist | routed · C-Federation-THSWPA · final_lgbm | transfer · C-Federation-THSWPA · E_plus_federation · lightgbm | 344287 | 110287 | -4.31 | -4.37 | -4.23 |
+| test_in_dist | routed · C-Federation-THSWPA · final_lgbm | transfer · C-Federation-THSWPA · D_plus_equipment · lightgbm | 344287 | 110287 | -4.57 | -4.64 | -4.50 |
+
 ## Subgroups (protocol A, feature set D; protocol B LightGBM)
 
 | run_id | group_by | group | rows | lifters | mae | mape | r2 | sparse |
@@ -1429,16 +1663,16 @@ Paired MAE differences (a − b; negative = a better):
 | dlatt__A__X_all-anyhist-dlatt__lightgbm | dlatt | A | X_all+anyhist+dlatt | lightgbm | 42 | 1817276 | 551698 | 390871 | 105.06 | 10.17 |
 | dlatt__A__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__s42 | dlatt | A | X_all+history_rich+anyhist+dlatt | embed_mlp | 42 | 1264025 | 301327 | 272140 | 100.14 | 8.32 |
 | dlatt__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows | dlatt | A | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1264025 | 301327 | 272140 | 85.75 | 8.25 |
-| ensemble__A__D_plus_equipment-history_rich__lgbm_mlp__histrows | ensemble | A | D_plus_equipment+history_rich | ensemble | 42 | 1264025 | 301327 | 272140 | 0.68 | 8.37 |
-| ensemble__A__D_plus_equipment__lgbm_mlp | ensemble | A | D_plus_equipment | ensemble | 42 | 1817276 | 551698 | 390871 | 1.12 | 14.10 |
+| ensemble__A__D_plus_equipment-history_rich__lgbm_mlp__histrows | ensemble | A | D_plus_equipment+history_rich | ensemble | 42 | 1264025 | 301327 | 272140 | 0.82 | 8.37 |
+| ensemble__A__D_plus_equipment__lgbm_mlp | ensemble | A | D_plus_equipment | ensemble | 42 | 1817276 | 551698 | 390871 | 1.39 | 14.10 |
 | ensemble__A__X_all-anyhist-dlatt__huber_embed | ensemble | A | X_all+anyhist+dlatt | ensemble | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.10 |
 | ensemble__A__X_all-anyhist__bestobj_embed | ensemble | A | X_all+anyhist | ensemble | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.17 |
 | ensemble__A__X_all-anyhist__bestobj_mlp | ensemble | A | X_all+anyhist | ensemble | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.20 |
-| ensemble__A__X_all-anyhist__lgbm_mlp | ensemble | A | X_all+anyhist | ensemble | 42 | 1817276 | 551698 | 390871 | 1.02 | 10.23 |
+| ensemble__A__X_all-anyhist__lgbm_mlp | ensemble | A | X_all+anyhist | ensemble | 42 | 1817276 | 551698 | 390871 | 1.16 | 10.23 |
 | ensemble__A__X_all-history_rich-anyhist-dlatt__huber_embed__histrows | ensemble | A | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.20 |
 | ensemble__A__X_all-history_rich-anyhist__bestobj_embed__histrows | ensemble | A | X_all+history_rich+anyhist | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.23 |
 | ensemble__A__X_all-history_rich-anyhist__bestobj_mlp__histrows | ensemble | A | X_all+history_rich+anyhist | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.26 |
-| ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows | ensemble | A | X_all+history_rich+anyhist | ensemble | 42 | 1264025 | 301327 | 272140 | 0.64 | 8.30 |
+| ensemble__A__X_all-history_rich-anyhist__lgbm_mlp__histrows | ensemble | A | X_all+history_rich+anyhist | ensemble | 42 | 1264025 | 301327 | 272140 | 0.76 | 8.30 |
 | ensemble__A__final2_all | ensemble | A | X_all+anyhist+dlatt | ensemble | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.03 |
 | ensemble__A__final2_ret__histrows | ensemble | A | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.08 |
 | ensemble__A__final2_ret_r__histrows | ensemble | A | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.08 |
@@ -1453,7 +1687,12 @@ Paired MAE differences (a − b; negative = a better):
 | ensemble__A__tuned_all | ensemble | A | X_all+anyhist+dlatt | ensemble | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.06 |
 | ensemble__A__tuned_ret__histrows | ensemble | A | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.11 |
 | ensemble__A__tuned_ret_le__histrows | ensemble | A | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.16 |
-| ensemble__B__D_plus_equipment__lgbm_mlp | ensemble | B | D_plus_equipment | ensemble | 42 | 1800694 | 575145 | 391938 | 1.02 | 13.55 |
+| ensemble__B__D_plus_equipment__lgbm_mlp | ensemble | B | D_plus_equipment | ensemble | 42 | 1800694 | 575145 | 391938 | 1.22 | 13.55 |
+| ensemble__B__final_all | ensemble | B | X_all+anyhist+dlatt | ensemble | 42 | 1800694 | 575145 | 391938 | 0.00 | 9.56 |
+| ensemble__B__final_all_le | ensemble | B | X_all+anyhist+dlatt | ensemble | 42 | 1800694 | 575145 | 391938 | 0.00 | 9.57 |
+| ensemble__B__final_ret__histrows | ensemble | B | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1223622 | 301072 | 279563 | 0.00 | 7.67 |
+| ensemble__B__final_ret_le__histrows | ensemble | B | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1223622 | 301072 | 279563 | 0.00 | 7.72 |
+| ensemble__B__final_ret_leg__histrows | ensemble | B | X_all+history_rich+anyhist+dlatt | ensemble | 42 | 1223622 | 301072 | 279563 | 0.00 | 7.68 |
 | expanded__A__X_all-anyhist__lightgbm | expanded | A | X_all+anyhist | lightgbm | 42 | 1817276 | 551698 | 390871 | 162.87 | 10.32 |
 | expanded__A__X_all-anyhist__mlp__s42 | expanded | A | X_all+anyhist | mlp | 42 | 1817276 | 551698 | 390871 | 150.84 | 10.33 |
 | expanded__A__X_all-history_rich-anyhist__lightgbm__histrows | expanded | A | X_all+history_rich+anyhist | lightgbm | 42 | 1264025 | 301327 | 272140 | 122.41 | 8.41 |
@@ -1466,6 +1705,27 @@ Paired MAE differences (a − b; negative = a better):
 | expanded__A__X_context__mlp__s42 | expanded | A | X_context | mlp | 42 | 1817276 | 551698 | 390871 | 83.85 | 13.78 |
 | expanded__B__X_all-anyhist__lightgbm | expanded | B | X_all+anyhist | lightgbm | 42 | 1800694 | 575145 | 391938 | 176.47 | 9.81 |
 | expanded__B__X_all-history_rich-anyhist__lightgbm__histrows | expanded | B | X_all+history_rich+anyhist | lightgbm | 42 | 1223622 | 301072 | 279563 | 139.28 | 7.96 |
+| final_B__B__X_all-anyhist-dlatt__embed_mlp__hpo__s42 | final_B | B | X_all+anyhist+dlatt | embed_mlp | 42 | 1800694 | 575145 | 391938 | 137.89 | 9.63 |
+| final_B__B__X_all-anyhist-dlatt__lightgbm__hpo | final_B | B | X_all+anyhist+dlatt | lightgbm | 42 | 1800694 | 575145 | 391938 | 285.39 | 9.64 |
+| final_B__B__X_all-anyhist-dlatt__resnet_mlp__s42 | final_B | B | X_all+anyhist+dlatt | resnet_mlp | 42 | 1800694 | 575145 | 391938 | 446.69 | 9.72 |
+| final_B__B__X_all-history_rich-anyhist-dlatt__embed_mlp__histrows__hpo__s42 | final_B | B | X_all+history_rich+anyhist+dlatt | embed_mlp | 42 | 1223622 | 301072 | 279563 | 230.20 | 7.80 |
+| final_B__B__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_B | B | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1223622 | 301072 | 279563 | 265.56 | 7.75 |
+| final_B__B__X_all-history_rich-anyhist-dlatt__resnet_mlp__histrows__s42 | final_B | B | X_all+history_rich+anyhist+dlatt | resnet_mlp | 42 | 1223622 | 301072 | 279563 | 284.09 | 7.83 |
+| final_B__B__X_all__gru__histrows__hpo__s42 | final_B | B | X_all | gru | 42 | 1223622 | 301072 | 279563 | 687.74 | 7.83 |
+| final_C__C-Equipment-Multi-ply__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Equipment=Multi-ply | X_all+anyhist+dlatt | lightgbm | 42 | 1783370 | 545204 | 383325 | 254.19 | 10.07 |
+| final_C__C-Equipment-Multi-ply__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Equipment=Multi-ply | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1239104 | 298461 | 266577 | 199.28 | 8.11 |
+| final_C__C-Equipment-Single-ply__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Equipment=Single-ply | X_all+anyhist+dlatt | lightgbm | 42 | 1125458 | 387275 | 241225 | 181.62 | 10.31 |
+| final_C__C-Equipment-Single-ply__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Equipment=Single-ply | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 768692 | 218295 | 164644 | 131.84 | 8.27 |
+| final_C__C-Equipment-Unlimited__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Equipment=Unlimited | X_all+anyhist+dlatt | lightgbm | 42 | 1627544 | 519210 | 350255 | 293.17 | 10.43 |
+| final_C__C-Equipment-Unlimited__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Equipment=Unlimited | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1108883 | 277095 | 238936 | 178.01 | 8.42 |
+| final_C__C-Equipment-Wraps__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Equipment=Wraps | X_all+anyhist+dlatt | lightgbm | 42 | 1669052 | 511754 | 359626 | 259.42 | 10.00 |
+| final_C__C-Equipment-Wraps__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Equipment=Wraps | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1169035 | 283754 | 252239 | 179.99 | 8.08 |
+| final_C__C-Federation-THSPA__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Federation=THSPA | X_all+anyhist+dlatt | lightgbm | 42 | 1494571 | 482222 | 321327 | 242.58 | 10.36 |
+| final_C__C-Federation-THSPA__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Federation=THSPA | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1016066 | 254739 | 218854 | 173.70 | 8.34 |
+| final_C__C-Federation-THSWPA__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Federation=THSWPA | X_all+anyhist+dlatt | lightgbm | 42 | 1619081 | 515155 | 347919 | 248.69 | 10.63 |
+| final_C__C-Federation-THSWPA__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Federation=THSWPA | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1104057 | 273588 | 237398 | 177.37 | 8.62 |
+| final_C__C-Federation-USAPL__X_all-anyhist-dlatt__lightgbm__hpo | final_C | C:Federation=USAPL | X_all+anyhist+dlatt | lightgbm | 42 | 1614712 | 494177 | 347247 | 256.10 | 10.09 |
+| final_C__C-Federation-USAPL__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo | final_C | C:Federation=USAPL | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1130507 | 271389 | 243215 | 156.58 | 8.18 |
 | history__A__D_plus_equipment-history__lightgbm__histrows | history | A | D_plus_equipment+history | lightgbm | 42 | 1264025 | 301327 | 272140 | 77.12 | 8.78 |
 | history__A__D_plus_equipment-history__linear__histrows | history | A | D_plus_equipment+history | linear | 42 | 1264025 | 301327 | 272140 | 1.72 | 9.89 |
 | history__A__D_plus_equipment-history__mlp__histrows__s42 | history | A | D_plus_equipment+history | mlp | 42 | 1264025 | 301327 | 272140 | 46.73 | 8.77 |
@@ -1487,6 +1747,10 @@ Paired MAE differences (a − b; negative = a better):
 | quantile__A__D_plus_equipment-history_rich__lightgbm__histrows__q90 | quantile | A | D_plus_equipment+history_rich | lightgbm | 42 | 1264025 | 301327 | 272140 | 28.59 | 13.79 |
 | quantile__A__D_plus_equipment__lightgbm__q10 | quantile | A | D_plus_equipment | lightgbm | 42 | 1817276 | 551698 | 390871 | 27.48 | 23.74 |
 | quantile__A__D_plus_equipment__lightgbm__q90 | quantile | A | D_plus_equipment | lightgbm | 42 | 1817276 | 551698 | 390871 | 22.81 | 24.32 |
+| quantile__A__X_all-anyhist-dlatt__lightgbm__final_q10 | quantile | A | X_all+anyhist+dlatt | lightgbm | 42 | 1817276 | 551698 | 390871 | 245.59 | 17.31 |
+| quantile__A__X_all-anyhist-dlatt__lightgbm__final_q90 | quantile | A | X_all+anyhist+dlatt | lightgbm | 42 | 1817276 | 551698 | 390871 | 246.16 | 16.77 |
+| quantile__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__final_q10 | quantile | A | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1264025 | 301327 | 272140 | 63.67 | 14.16 |
+| quantile__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__final_q90 | quantile | A | X_all+history_rich+anyhist+dlatt | lightgbm | 42 | 1264025 | 301327 | 272140 | 86.19 | 13.35 |
 | resnet__A__X_all-anyhist-dlatt__resnet_mlp__s42 | resnet | A | X_all+anyhist+dlatt | resnet_mlp | 42 | 1817276 | 551698 | 390871 | 910.90 | 10.10 |
 | resnet__A__X_all-anyhist-dlatt__resnet_mlp__s43 | resnet | A | X_all+anyhist+dlatt | resnet_mlp | 43 | 1817276 | 551698 | 390871 | 667.88 | 10.13 |
 | resnet__A__X_all-anyhist-dlatt__resnet_mlp__s44 | resnet | A | X_all+anyhist+dlatt | resnet_mlp | 44 | 1817276 | 551698 | 390871 | 301.99 | 10.26 |
@@ -1504,6 +1768,16 @@ Paired MAE differences (a − b; negative = a better):
 | routed__A__original_specialists | routed | A | routed | routed | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.02 |
 | routed__A__seedavg_specialists | routed | A | routed | routed | 42 | 1817276 | 551698 | 390871 | 0.00 | 9.58 |
 | routed__A__tuned_specialists | routed | A | routed | routed | 42 | 1817276 | 551698 | 390871 | 0.00 | 9.59 |
+| routed__B__expanded_specialists | routed | B | routed | routed | 42 | 1800694 | 575145 | 391938 | 0.00 | 9.37 |
+| routed__B__final_recipe | routed | B | routed | routed | 42 | 1800694 | 575145 | 391938 | 0.00 | 9.14 |
+| routed__B__original_specialists | routed | B | routed | routed | 42 | 1800694 | 575145 | 391938 | 0.00 | 9.56 |
+| routed__C-Equipment-Multi-ply__final_lgbm | routed | C:Equipment=Multi-ply | routed | routed | 42 | 1783370 | 545204 | 383325 | 0.00 | 9.59 |
+| routed__C-Equipment-Single-ply__final_lgbm | routed | C:Equipment=Single-ply | routed | routed | 42 | 1125458 | 387275 | 241225 | 0.00 | 9.80 |
+| routed__C-Equipment-Unlimited__final_lgbm | routed | C:Equipment=Unlimited | routed | routed | 42 | 1627544 | 519210 | 350255 | 0.00 | 9.92 |
+| routed__C-Equipment-Wraps__final_lgbm | routed | C:Equipment=Wraps | routed | routed | 42 | 1669052 | 511754 | 359626 | 0.00 | 9.52 |
+| routed__C-Federation-THSPA__final_lgbm | routed | C:Federation=THSPA | routed | routed | 42 | 1494571 | 482222 | 321327 | 0.00 | 9.84 |
+| routed__C-Federation-THSWPA__final_lgbm | routed | C:Federation=THSWPA | routed | routed | 42 | 1619081 | 515155 | 347919 | 0.00 | 10.11 |
+| routed__C-Federation-USAPL__final_lgbm | routed | C:Federation=USAPL | routed | routed | 42 | 1614712 | 494177 | 347247 | 0.00 | 9.61 |
 | seedavg__A__embed_all | seedavg | A | X_all+anyhist+dlatt | seedavg | 42 | 1817276 | 551698 | 390871 | 0.00 | 10.06 |
 | seedavg__A__embed_ret | seedavg | A | X_all+history_rich+anyhist+dlatt | seedavg | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.18 |
 | seedavg__A__gru_ret | seedavg | A | X_all | seedavg | 42 | 1264025 | 301327 | 272140 | 0.00 | 8.17 |

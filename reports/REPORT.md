@@ -469,6 +469,65 @@ its ordered target statistics see only training rows. Settings were fixed and un
   lifters.
 - **Cost:** about 40–45 minutes per specialist on CPU, roughly 10× LightGBM.
 
+#### Final system: prediction ranges, later meets, and transfer
+
+**Ranges for the final system.** Each range is the final system's prediction ± Q × spread:
+
+- **spread** is half the gap between 10th- and 90th-percentile LightGBM quantile models, built with each specialist's
+  tuned settings and routed like the point prediction. It is floored at 1 kg.
+- **Q = 1.03** is fitted on validation only (normalized split-conformal).
+- Unlike the earlier ranges, the prediction always lies inside its own range.
+
+| Test (386,613 rows) | Coverage (target 80%) | Median width | Below / above |
+|---|---|---|---|
+| All lifters | **80.2%** | **27 kg** (about ±14) | 10.3% / 9.4% |
+| First-timers (118,324) | 80.4% | 42 kg (about ±21) | 9.1% / 10.5% |
+| Returning lifters (268,289) | 80.2% | 23 kg (about ±12) | 10.9% / 8.9% |
+
+Coverage stays within about 1.5 points across Sex, bodyweight bins, and equipment. The exceptions are Mx (14 rows,
+71%) and Multi-ply (78%). Ranges are narrower than the earlier ones (45 / 24 kg).
+
+**Later meets (protocol B, 402,128 test rows from 2024-11 onward).** The final recipe was retrained on the date split:
+tuned LightGBM, embedding MLP, GRU, and ResNet, one seed each. Blend weights were chosen on B's validation period.
+**B results were never used to choose any follow-up**, so this is the independent check on whether the protocol-A
+gains are real.
+
+| Protocol B test | Original specialists | Expanded-input specialists | **Final recipe** | Δ final − expanded |
+|---|---|---|---|---|
+| All (402,128) | 9.59 | 9.35 | **9.11** | −0.24 [−0.25, −0.23] |
+| First-timers (100,859) | 13.85 | 13.05 | **13.00** | −0.06 [−0.07, −0.04] |
+| Returning (301,269) | 8.17 | 8.11 | **7.81** | −0.30 [−0.31, −0.29] |
+
+The later follow-ups (career and attempt history, tuning, the new architectures, and blending) were chosen while
+looking at protocol A. On A they improved expanded → final by 0.18 kg; on unseen later meets they improve by
+**0.24 kg**. So the gains hold up and are not an artifact of repeatedly using the protocol-A test set. B's absolute
+MAE is lower than A's partly because recent meets have more Raw lifting and more lifters with history.
+
+**Transfer (protocol C).** For each held-out group, the tuned LightGBM specialists (final features, routed) were
+retrained without that group. The fair measure is the **cost of never seeing the group**: on identical test rows, it is
+the held-out model's error minus the protocol-A final system's error, where A had the group in training.
+
+| Held-out group | Test rows | Seen in training (A final) | **Held out (C)** | Cost [95% CI] |
+|---|---|---|---|---|
+| USAPL | 43,006 | 10.06 | 10.21 | +0.15 [+0.12, +0.18] |
+| Unlimited | 40,208 | 7.26 | 7.50 | +0.23 [+0.21, +0.26] |
+| Single-ply | 147,373 | 9.33 | 9.79 | +0.46 [+0.44, +0.48] |
+| Multi-ply | 7,369 | 13.79 | 14.52 | +0.74 [+0.60, +0.84] |
+| THSWPA (HS girls) | 42,326 | 5.87 | 6.71 | +0.84 [+0.80, +0.87] |
+| Wraps | 31,414 | 11.11 | 12.50 | +1.39 [+1.31, +1.47] |
+| THSPA (HS boys) | 69,477 | 8.69 | 10.37 | +1.68 [+1.63, +1.76] |
+
+- **The cost includes a model difference.** The held-out side is LightGBM-only, while the A side is the full blend
+  (worth about 0.1 kg). Part of each cost is that difference.
+- **The cost is small for groups that resemble the training data:** USAPL, Unlimited, and Single-ply all stay
+  under 0.5 kg.
+- **It is largest for distinctive populations:** Wraps meets and the Texas high-school federations cost 1.4–1.7 kg.
+- **Lifter history makes transfer far less fragile.** Earlier no-history models lost 2–9 kg on these groups. The
+  final features keep every held-out group within 1.7 kg of its seen-in-training error.
+- **The old failure mode is gone.** The final system has no catastrophic unseen-equipment failures (earlier linear
+  models reached 63–117 kg). Even Multi-ply, the most extreme population, drops from 22.6 to 14.5 kg.
+- Gaps reflect population differences and are not causal effects of equipment or federation.
+
 ### RQ4 — Later meets and unseen groups
 
 **Later meets (protocol B, 402,128 test rows from 2024-11 onward).** LightGBM gets 14.04 kg and the MLP 14.00 kg,
@@ -592,7 +651,7 @@ history on identical rows, and chronological and group-transfer tests.
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e ".[dev]" --no-deps
-.venv/bin/pytest -q                                    # 60 tests
+.venv/bin/pytest -q                                    # 61 tests
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
