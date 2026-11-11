@@ -19,18 +19,23 @@ python3.13 -m venv .venv
 ## Commands
 
 ```bash
-deadlift smoke                                   # synthetic end-to-end fixture (scores are NOT findings)
-deadlift download                                # fetch + register snapshot once (sha256, schema, row count)
-deadlift prepare   --config configs/subset.yaml  # clean, identity audit, past-only history, frozen splits
-deadlift train     --config configs/subset.yaml  # all planned runs; finished runs are skipped
-deadlift ensemble  --config configs/subset.yaml  # blends, seed averages, routed systems (weights chosen on validation)
-deadlift hpo       --config configs/subset.yaml  # bounded random hyperparameter search (validation only, resumable)
-deadlift evaluate  --config configs/subset.yaml  # validation-only tables (development)
-deadlift summarize --config configs/subset.yaml
+deadlift smoke                                    # synthetic end-to-end fixture (scores are NOT findings)
+deadlift download                                 # fetch + register snapshot once (sha256, schema, row count)
+deadlift prepare   --config configs/default.yaml  # clean, identity audit, past-only history, frozen splits
+deadlift train     --config configs/default.yaml  # all runs that don't depend on the search; finished runs are skipped
+deadlift hpo       --config configs/default.yaml  # bounded random hyperparameter search (validation only, resumable)
+deadlift train     --config configs/default.yaml  # again: refits the tuned models + extra seeds
+deadlift ensemble  --config configs/default.yaml  # blends, seed averages, routed systems (weights chosen on validation)
+deadlift evaluate  --config configs/default.yaml  # validation-only tables (development)
+deadlift summarize --config configs/default.yaml
 deadlift evaluate  --config configs/default.yaml --final   # test scoring, only after configs are frozen
 deadlift summarize --config configs/default.yaml --final
 pytest -q
 ```
+
+Order matters: `hpo` must finish before the second `train`, and `ensemble` needs both. Use
+`configs/subset.yaml` (10% of lifters) for a faster dry run. Full-snapshot wall time on an 8-core laptop is
+roughly 10–14 hours in total, dominated by the search, CatBoost, and the sequence models.
 
 `train` accepts `--experiment {ablation,history,chrono,transfer,capacity,history_rich,quantile,expanded,objective,dl_arch,dlatt,seq,tuned,resnet,seqtf,catboost}` (repeatable) and `--only <substring>`.
 

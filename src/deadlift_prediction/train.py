@@ -143,10 +143,16 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
 
     # 12. Follow-up: refit the best hyperparameter-search settings on the full training partition.
     from .hpo import TARGETS, best_overrides
+    missing = []
     for name, (kind, fs, hist) in TARGETS.items():
         ov = best_overrides(cfg, name)
         if ov is not None:
             runs.append(RunSpec("tuned", "A", fs, kind, seed=seeds[0], history_only=hist, variant="hpo", overrides=ov))
+        else:
+            missing.append(name)
+    if missing:
+        print(f"WARNING: no finished hyperparameter search for {missing}; their 'tuned' runs and extra seeds are "
+              "skipped. Run `deadlift hpo`, then `deadlift train` again, before `deadlift ensemble`.", flush=True)
 
     # 13. Follow-up: extra seeds of the tuned models (averaged later) and a tabular ResNet.
     extra = cfg.get("seedavg", {}).get("extra_seeds", [])

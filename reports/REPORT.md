@@ -596,7 +596,8 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/
 .venv/bin/deadlift download                            # registers the snapshot (reuses data/raw if present)
 .venv/bin/deadlift prepare   --config configs/default.yaml
 .venv/bin/deadlift train     --config configs/default.yaml   # 73 runs + 6 capacity + 3 career-history + 4 quantile + 12 expanded-input + 8 objective + 2 embedding-MLP + 4 past-attempt + 2 GRU runs
-.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only); then train --experiment tuned --experiment resnet --experiment seqtf --experiment catboost
+.venv/bin/deadlift hpo       --config configs/default.yaml   # 54-trial search (validation only)
+.venv/bin/deadlift train     --config configs/default.yaml   # again: tuned refits + extra seeds (skipped until hpo finishes)
 .venv/bin/deadlift ensemble  --config configs/default.yaml   # blends, seed averages, and 8 routed systems
 .venv/bin/deadlift evaluate  --config configs/default.yaml --final
 .venv/bin/deadlift summarize --config configs/default.yaml --final
