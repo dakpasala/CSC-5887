@@ -21,11 +21,19 @@ def test_synthetic_pipeline_end_to_end():
     from deadlift_prediction.ensemble import ROUTED
     from deadlift_prediction.ensemble import DLATT_BLENDS, FINAL2_BLENDS, FINAL3_BLENDS, RESNET_AVG, SEEDAVG_BLENDS, SEQ_BLENDS, TUNED_BLENDS
     from deadlift_prediction.hpo import TARGETS as HPO_T
-    assert len(out["ensembles"]) == (len(PAIRS) + 4 + len(DLATT_BLENDS) + len(SEQ_BLENDS) + len(TUNED_BLENDS)
+    assert len(out["ensembles"]) >= (len(PAIRS) + 4 + len(DLATT_BLENDS) + len(SEQ_BLENDS) + len(TUNED_BLENDS)
                                      + len(SEEDAVG_BLENDS) + len(HPO_T) + len(ROUTED)
                                      + len(RESNET_AVG) + len(FINAL2_BLENDS) + len(FINAL3_BLENDS))
+    names = {e["run_id"] for e in out["ensembles"]}
+    assert "routed__B__final_recipe" in names
+    assert any(n.startswith("routed__C-") for n in names)
+    fi = pd.read_csv(root / "tables_final" / "intervals_final.csv", keep_default_na=False)
+    assert {"val", "test"} <= set(fi["partition"]) and fi["coverage"].between(0, 1).all()
+    p_final = pd.read_parquet(root / "runs" / "routed__A__final3_specialists" / "predictions.parquet")
+    assert p_final["yhat"].notna().all()
     assert {"routed_final_all_lifters", "routed_final2_all_lifters", "seqtf|returning",
-            "routed_final3_all_lifters"} <= set(m["comparison"])
+            "routed_final3_all_lifters",
+            "finalB|all"} <= set(m["comparison"])
     assert any(r["experiment"] == "tuned" for r in out["runs"])
     assert {"routed_all_lifters", "routed_first_timers", "routed_returning"} <= set(m["comparison"])
     assert any(c.startswith("expanded_") for c in m["comparison"])

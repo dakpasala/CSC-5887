@@ -59,3 +59,15 @@ def test_conformal_correction_reaches_target_coverage():
     assert q > 0 and abs(cov - 0.8) < 0.015
     # an over-wide range is narrowed (negative correction)
     assert conformal_correction(y, np.full_like(y, -50.0), np.full_like(y, 50.0), 0.8) < 0
+
+
+def test_normalized_conformal_contains_point_and_hits_coverage():
+    from deadlift_prediction.intervals import normalized_correction
+
+    rng = np.random.default_rng(1)
+    spread = rng.uniform(2, 20, 30000)
+    y = rng.normal(0, 1, 30000) * spread  # heteroscedastic: noise scales with spread
+    q = normalized_correction(y, np.zeros_like(y), spread, 0.8)
+    y2 = rng.normal(0, 1, 30000) * spread
+    cov = np.mean(np.abs(y2) <= q * spread)
+    assert abs(cov - 0.8) < 0.015 and q > 0  # point (0) is always inside [-q*s, q*s]

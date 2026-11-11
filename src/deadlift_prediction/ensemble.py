@@ -292,3 +292,91 @@ def build_objective_ensembles(cfg: dict, has_history: pd.Series) -> list[dict]:
         print(f"{name}: val MAE {meta['val_metrics']['mae']:.3f}")
         metas.append(meta)
     return metas
+
+
+# ---------------------------------------------------------------------------- final recipe on protocols B and C
+
+FINAL_SYSTEM = "routed__A__final3_specialists"  # current best protocol-A system (CatBoost weight 0 => same as final2)
+
+
+def _final_id(proto: str, name: str) -> str:
+    from .hpo import TARGETS
+    from .train import RunSpec
+
+    if name.startswith("resnet"):
+        fs, hist = RESNET_AVG[name]
+        return RunSpec("final_B", proto, fs, "resnet_mlp", seed=42, history_only=hist).run_id
+    kind, fs, hist = TARGETS[name]
+    exp = "final_B" if proto == "B" else "final_C"
+    return RunSpec(exp, proto, fs, kind, seed=42, history_only=hist, variant="hpo").run_id
+
+
+def route(cfg: dict, name: str, first_id: str, hist_id: str, has_history: pd.Series) -> dict | None:
+    """Routed system over every partition of the first-timer run: returning-lifter
+    predictions replace first-timer ones wherever a strictly earlier full-power
+    meet exists (known before the deadlift)."""
+    root = artifacts_dir(cfg) / "runs"
+    if not all((root / r / "done.json").exists() for r in (first_id, hist_id)):
+        return None
+    f = pd.read_parquet(root / first_id / "predictions.parquet").set_index(["row_id", "partition"])
+    h = pd.read_parquet(root / hist_id / "predictions.parquet").set_index(["row_id", "partition"])
+    use_h = has_history.reindex(f.index.get_level_values("row_id")).to_numpy(bool)
+    out = f.copy()
+    hk = f.index[use_h]
+    out.loc[hk, "yhat"] = h.loc[hk, "yhat"].to_numpy()
+    tmpl = {**read_json(root / first_id / "meta.json"), "feature_set": "routed", "history_only": False}
+    meta = _write_pseudo_run(cfg, name, out.reset_index(), tmpl,
+                             {"first_timers": first_id, "returning_lifters": hist_id,
+                              "rule": "returning-lifter model when a strictly earlier full-power meet exists"},
+                             [first_id, hist_id], "routed")
+    print(f"{name}: val MAE {meta['val_metrics'].get('mae', float('nan')):.3f}")
+    return meta
+
+
+def final_b_blends() -> list[tuple[str, str, str]]:
+    i = lambda n: _final_id("B", n)
+    return [
+        (i("lgbm_all"), i("embed_all"), "ensemble__B__final_all_le"),
+        ("ensemble__B__final_all_le", i("resnet_all"), "ensemble__B__final_all"),
+        (i("lgbm_ret"), i("embed_ret"), "ensemble__B__final_ret_le__histrows"),
+        ("ensemble__B__final_ret_le__histrows", i("gru_ret"), "ensemble__B__final_ret_leg__histrows"),
+        ("ensemble__B__final_ret_leg__histrows", i("resnet_ret"), "ensemble__B__final_ret__histrows"),
+    ]
+
+
+B_ROUTED = {
+    "routed__B__original_specialists": ("chrono__B__D_plus_equipment__lightgbm",
+                                        "history_rich__B__D_plus_equipment-history_rich__lightgbm__histrows"),
+    "routed__B__expanded_specialists": ("expanded__B__X_all-anyhist__lightgbm",
+                                        "expanded__B__X_all-history_rich-anyhist__lightgbm__histrows"),
+    "routed__B__final_recipe": ("ensemble__B__final_all", "ensemble__B__final_ret__histrows"),
+}
+
+
+def c_routed_name(field: str, value: str) -> str:
+    return f"routed__C-{field}-{value}__final_lgbm"
+
+
+def build_final_protocols(cfg: dict, has_history: pd.Series, transfer_groups: list[dict]) -> list[dict]:
+    """Blend + route the final recipe on protocol B, and route the tuned LightGBM
+    specialists for each protocol-C transfer group. Blend weights use each
+    protocol's own validation partition."""
+    root = artifacts_dir(cfg) / "runs"
+    metas = []
+    for a, b, run_id in final_b_blends():
+        if not ((root / a / "done.json").exists() and (root / b / "done.json").exists()):
+            continue
+        m, w, tuning = _blend(root, a, b)
+        meta = _write_pseudo_run(cfg, run_id, m, read_json(root / a / "meta.json"),
+                                 {"w_first": w, "weight_tuning": tuning}, [a, b], "ensemble")
+        print(f"{run_id}: w={w}, val MAE {meta['val_metrics']['mae']:.3f}")
+        metas.append(meta)
+    for name, (f, h) in B_ROUTED.items():
+        if (meta := route(cfg, name, f, h, has_history)) is not None:
+            metas.append(meta)
+    for g in transfer_groups:
+        proto = f"C:{g['field']}={g['value']}"
+        meta = route(cfg, c_routed_name(g["field"], g["value"]), _final_id(proto, "lgbm_all"), _final_id(proto, "lgbm_ret"), has_history)
+        if meta is not None:
+            metas.append(meta)
+    return metas

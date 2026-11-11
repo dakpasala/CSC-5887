@@ -367,9 +367,26 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     add(E.compare("routed_final3_first_timers", r3, T, row_filter=no_h, pairs=[(r3[1], r3[0])]))
     add(E.compare("routed_final3_returning", r3, T, row_filter=has_h, pairs=[(r3[1], r3[0])]))
 
+    # 18. final recipe on protocol B (later meets) and protocol C (transfer)
+    from .ensemble import B_ROUTED, c_routed_name
+    rb_ids = list(B_ROUTED)
+    TB = E.test_part()
+    for nm, filt in [("all", None), ("first_timers", no_h), ("returning", has_h)]:
+        add(E.compare(f"finalB|{nm}", rb_ids, TB, row_filter=filt,
+                      pairs=[(rb_ids[2], rb_ids[0]), (rb_ids[2], rb_ids[1])]))
+    for g in E.splits["transfer_groups"]:
+        proto = f"C:{g['field']}={g['value']}"
+        wf, wo = (("D_plus_equipment", "C_plus_demographics") if g["field"] == "Equipment" else ("E_plus_federation", "D_plus_equipment"))
+        old_with, old_without = rid("transfer", proto, wf, "lightgbm"), rid("transfer", proto, wo, "lightgbm")
+        new = c_routed_name(g["field"], g["value"])
+        for part in (["test_transfer", "test_in_dist"] if final else ["val"]):
+            add(E.compare(f"finalC|{g['field']}={g['value']}", [old_with, old_without, new], part,
+                          pairs=[(new, old_with), (new, old_without)]))
+
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
-    from .intervals import evaluate_intervals
+    from .intervals import evaluate_final_intervals, evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)
+    evaluate_final_intervals(cfg, final, E.ctx)
 
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)

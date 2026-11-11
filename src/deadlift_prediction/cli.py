@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--existing", type=Path, help="register an already-downloaded zip instead of fetching")
     add("prepare", "clean, audit, compute history, freeze splits")
     p = add("train", "fit all planned runs (skips finished runs)")
-    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile", "expanded", "objective", "dl_arch", "dlatt", "seq", "tuned", "resnet", "seqtf", "catboost"])
+    p.add_argument("--experiment", action="append", choices=["ablation", "history", "chrono", "transfer", "capacity", "history_rich", "quantile", "expanded", "objective", "dl_arch", "dlatt", "seq", "tuned", "resnet", "seqtf", "catboost", "final_B", "final_C"])
     p.add_argument("--only", help="substring filter on run IDs")
     p.add_argument("--force", action="store_true")
     add("ensemble", "build LightGBM+MLP ensembles from finished runs (weight chosen on validation)")
@@ -50,9 +50,12 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "ensemble":
         from .ensemble import build_ensembles, build_objective_ensembles
         from .prepare import load_prepared
+        from .ensemble import build_final_protocols
         build_ensembles(cfg)
-        df, _ = load_prepared(cfg)
-        build_objective_ensembles(cfg, df.set_index("row_id")["has_history"])
+        df, splits = load_prepared(cfg)
+        hh = df.set_index("row_id")["has_history"]
+        build_objective_ensembles(cfg, hh)
+        build_final_protocols(cfg, hh, splits["transfer_groups"])
     elif args.cmd == "hpo":
         from .hpo import run_search
         run_search(cfg, only=args.only)
@@ -86,9 +89,12 @@ def smoke(config: str | Path | None = None) -> dict:
     metas = train(cfg, force=True)
     from .ensemble import build_ensembles, build_objective_ensembles
     from .prepare import load_prepared
+    from .ensemble import build_final_protocols
     ens = build_ensembles(cfg)
-    df, _ = load_prepared(cfg)
-    ens += build_objective_ensembles(cfg, df.set_index("row_id")["has_history"])
+    df, splits = load_prepared(cfg)
+    hh = df.set_index("row_id")["has_history"]
+    ens += build_objective_ensembles(cfg, hh)
+    ens += build_final_protocols(cfg, hh, splits["transfer_groups"])
     for final in (False, True):
         evaluate(cfg, final=final)
         summarize_results(cfg, final=final)

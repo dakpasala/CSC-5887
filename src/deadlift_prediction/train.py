@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf | catboost
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf | catboost | final_B | final_C
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -179,7 +179,28 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
     for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
         runs.append(RunSpec("catboost", "A", fs, "catboost", history_only=hist))
 
-    # 16. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 16. Follow-up: final recipe on protocol B (later meets) and C (transfer), and quantile models for the
+    #     final system's prediction ranges. Tuned settings come from the protocol-A search (validation only).
+    final_targets = {n: TARGETS[n] for n in ["lgbm_all", "lgbm_ret", "embed_all", "embed_ret", "gru_ret"]}
+    best = {n: best_overrides(cfg, n) for n in final_targets}
+    if all(v is not None for v in best.values()):
+        for name, (kind, fs, hist) in final_targets.items():
+            runs.append(RunSpec("final_B", "B", fs, kind, seed=seeds[0], history_only=hist, variant="hpo", overrides=best[name]))
+        for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+            runs.append(RunSpec("final_B", "B", fs, "resnet_mlp", seed=seeds[0], history_only=hist))
+        for g in splits_info["transfer_groups"]:
+            proto = f"C:{g['field']}={g['value']}"
+            for name in ["lgbm_all", "lgbm_ret"]:
+                kind, fs, hist = final_targets[name]
+                runs.append(RunSpec("final_C", proto, fs, kind, history_only=hist, variant="hpo", overrides=best[name]))
+        for name in ["lgbm_all", "lgbm_ret"]:
+            kind, fs, hist = final_targets[name]
+            for q in cfg.get("quantile", {}).get("levels", []):
+                ov = {k: v for k, v in best[name].items() if k != "huber_delta"}
+                ov.update({"objective": "quantile", "alpha": q})
+                runs.append(RunSpec("quantile", "A", fs, kind, history_only=hist, variant=f"final_q{round(q * 100):02d}", overrides=ov))
+
+    # 17. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,
