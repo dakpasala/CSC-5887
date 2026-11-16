@@ -38,12 +38,15 @@ Our main contributions are:
 - **A measured ablation of input groups and lifter history.** Squat-based ratios give 21.9 kg mean absolute error
   (MAE). A gradient-boosted model with same-meet inputs reaches 14.1 kg. Adding prior-meet history lowers the error
   for returning lifters to about 8 kg, roughly 5 kg better than simply repeating their last deadlift.
-- **A comparison of tree ensembles with deep tabular and sequence models.** LightGBM, CatBoost, MLPs (plain,
-  embedding-based, ResNet), a GRU, and a Transformer over meet histories all land within about 0.1 kg of each
-  other once tuned. Blending them gives a final system with **9.54 kg MAE** on unseen lifters, 12.98 kg for
-  first-time lifters, and 8.02 kg for returning lifters.
-- **Generalization and uncertainty tests.** The final recipe reaches 9.11 kg on meets after the training period.
-  Never-seen federations and equipment categories cost 0.15–1.7 kg. Calibrated 80% prediction ranges achieve 80.2%
+- **A simple main model.** A tuned LightGBM, split into two specialists (one for first-time lifters, one for lifters
+  with earlier meets), reaches **9.64 kg MAE** on unseen lifters. The split alone is worth about 0.5 kg over a single
+  model for everyone.
+- **A comparison of tree ensembles with deep tabular and sequence models.** CatBoost, MLPs (plain, embedding-based,
+  ResNet), a GRU, and a Transformer over meet histories all land within about 0.1 kg of the LightGBM specialists.
+  A validation-weighted blend of them gives our best result: **9.54 kg** overall, 12.98 kg for first-time lifters,
+  and 8.02 kg for returning lifters.
+- **Generalization and uncertainty tests.** On meets after the training period, the blend reaches 9.11 kg. Federations
+  and equipment categories never seen in training cost 0.15–1.7 kg. Calibrated 80% prediction ranges achieve 80.2%
   test coverage.
 
 ---
