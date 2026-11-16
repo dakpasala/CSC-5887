@@ -37,7 +37,7 @@ Order matters: `hpo` must finish before the second `train`, and `ensemble` needs
 `configs/subset.yaml` (10% of lifters) for a faster dry run. Full-snapshot wall time on an 8-core laptop is
 roughly 10–14 hours in total, dominated by the search, CatBoost, and the sequence models.
 
-`train` accepts `--experiment {ablation,history,chrono,transfer,capacity,history_rich,quantile,expanded,objective,dl_arch,dlatt,seq,tuned,resnet,seqtf,catboost}` (repeatable) and `--only <substring>`.
+`train` accepts `--experiment {ablation,history,chrono,transfer,capacity,history_rich,quantile,expanded,objective,dl_arch,dlatt,seq,tuned,resnet,seqtf,catboost,final_B,final_C}` (repeatable) and `--only <substring>`.
 
 ## Layout
 
