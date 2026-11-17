@@ -286,10 +286,11 @@ weight.
 
 ### D. Prediction ranges
 
-Each prediction from the best (blended) system comes with an 80% range: the prediction ± Q × spread.
+Each prediction from the ResNet main model comes with an 80% range: the prediction ± Q × spread.
 
-- **Spread:** half the gap between two quantile LightGBM models (10th and 90th percentile), built with each
-  specialist's tuned settings and floored at 1 kg. Harder cases therefore get wider ranges.
+- **Spread:** an estimate of how hard each case is, taken as half the gap between two quantile LightGBM models (10th
+  and 90th percentile) built with each specialist's tuned settings, and floored at 1 kg. Harder cases therefore get
+  wider ranges. Tree models estimate the uncertainty; the ResNet makes the prediction.
 - **Q = 1.03:** a single scale factor fitted on validation lifters (normalized split-conformal prediction [13], [14]),
   so that 80% of validation results fall inside.
 - The prediction always lies inside its own range. Test coverage is the independent check.

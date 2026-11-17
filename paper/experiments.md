@@ -203,21 +203,26 @@ differences, not causal effects of equipment or federation.
 
 ### F. Prediction ranges
 
-Each prediction comes with an 80% range: the prediction ± Q × spread. The spread comes from quantile LightGBM models,
-and the scale Q is fitted on validation only (Section V-D). Test results:
+Each ResNet prediction comes with an 80% range: the prediction ± Q × spread. The spread is the estimated difficulty of
+each case, taken from two quantile LightGBM models (10th and 90th percentile). The scale Q = 1.03 is fitted on
+validation only (Section V-D). Test results:
 
 | Group | Coverage (target 80%) | Median width |
 |---|---|---|
 | All lifters | **80.2%** | 27 kg (±14) |
-| First-time | 80.4% | 42 kg (±21) |
+| First-time | 80.3% | 42 kg (±21) |
 | Returning | 80.2% | 23 kg (±12) |
 
-**Calibrated.** Test coverage matches the 80% target. Misses are balanced (10.3% below the range, 9.4% above), and the
+**Calibrated.** Test coverage matches the 80% target. Misses are balanced (10.1% below the range, 9.7% above), and the
 prediction always lies inside its own range.
 
 **Adaptive.** Ranges are much tighter for returning lifters than for first-time lifters, and for women (median
-19.5 kg) than for men (30.9 kg). Coverage stays within about 1.5 points of 80% across sex, bodyweight bins, and
-equipment. The weakest groups are Multi-ply (78%) and the very small Mx group (14 results).
+19.5 kg) than for men (31.1 kg). Coverage holds across subgroups:
+
+- every bodyweight bin: 79.7–80.5%;
+- Raw, Single-ply, Unlimited, and Wraps: 79.2–81.5%.
+
+The weakest groups are Multi-ply (78.2%) and the very small Mx group (14 results).
 
 **Usefulness.** Calibrated ranges are the right way to present these predictions as reference values. A typical
 returning lifter's recorded deadlift falls within about ±12 kg of the prediction eight times out of ten.
