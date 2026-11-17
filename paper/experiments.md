@@ -163,19 +163,20 @@ on the same rows.
 |---|---|---|---|
 | LightGBM, original inputs (same-meet + previous meet) | 9.59 | 13.85 | 8.17 |
 | LightGBM, expanded inputs | 9.35 | 13.05 | 8.11 |
-| **ResNet MLP, final inputs (main model)** ‡ | **9.25** | 13.09 | **7.96** |
-| Blend, final recipe | **9.11** | **13.00** | **7.81** |
+| **ResNet MLP, final inputs (main model, 3 seeds)** | **9.10** | **13.01** | **7.79** |
+| Blend, final recipe (1 seed per component) | 9.11 | 13.00 | 7.81 |
 
-‡ **TEMP: seed 42 only. Update to the 3-seed average when the runs finish.**
+**The main model holds up about two years past the training period.** It beats the expanded-input trees by
+0.26 kg [0.24, 0.27] overall, and by 0.33 kg [0.31, 0.34] for returning lifters. It even edges out the full blend,
+by 0.013 kg [0.007, 0.019]; the blend here uses one seed per component, while the ResNet averages three. Absolute
+error is somewhat lower than on protocol A, partly because recent meets have more Raw lifting and more lifters with
+history.
 
-The main model holds up about two years past the training period. It beats the expanded-input trees by 0.10 kg,
-mostly through returning lifters (−0.15 kg). Absolute error is somewhat lower than on protocol A, partly because recent
-meets have more Raw lifting and more lifters with history.
-
-This table also checks our own process. The later follow-ups (career and attempt history, tuning, new architectures,
-blending) were chosen while looking at protocol-A results, so their protocol-A gains could be slightly optimistic.
-Protocol B was never used for any choice. There, the same follow-ups improve accuracy by 0.24 kg, against 0.18 kg on
-protocol A. The gains are therefore real, not an artifact of reusing one test set.
+This table also checks our own process. Most later improvements (career and attempt history, tuning, new
+architectures, blending) were chosen while looking at protocol-A results, so their protocol-A gains could be slightly
+optimistic. Protocol B was never used for any choice. Measured against the expanded-input trees, the main model
+improves by 0.26 kg on protocol B versus 0.12 kg on protocol A. The improvements carry over to data never used for
+any decision.
 
 **Unseen federations and equipment (protocol C).** For each held-out group, we compare LightGBM specialists trained
 without the group against the best system trained with it, on the same test rows. The difference is the cost of
