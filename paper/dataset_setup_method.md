@@ -172,51 +172,63 @@ missing rather than filled with made-up values.
 
 **Preprocessing.** All preprocessing is learned from the training partition only:
 
-- **Numbers:** passed as-is, with missing values left for the tree model to handle natively.
+- **Numbers, for the networks:** missing values are filled with the training median, and a missing-value indicator is
+  added for every input that has missing values in training. Values are then standardized with training means and
+  standard deviations.
+- **Numbers, for the tree models:** passed as-is, with missing values handled natively.
 - **Categories:** a category gets its own code if it has at least 500 training rows. Rarer categories, unseen
   categories, and missing values share an *unknown* code. This leaves 186 federation codes in training (of 440
-  federations) and 72 country codes.
+  federations) and 72 country codes. Networks receive these codes one-hot encoded, with a dedicated *unknown* column.
 
-### B. Main model: LightGBM specialists
+### B. Main model: ResNet MLP specialists
 
-Our main model is gradient-boosted decision trees (LightGBM [6]), used as **two specialists**:
+Our main model is a tabular residual network (ResNet MLP), following the architecture of Gorishniy et al. [9]. We
+implemented it in PyTorch and use it as **two specialists**:
 
-- **First-time-lifter specialist.** Trained on all training rows. Inputs: same-meet inputs, any-event deadlift
-  history, and previous-attempt features (24 numeric, 6 categorical).
-- **Returning-lifter specialist.** Trained only on training rows that have an earlier full-power meet. Inputs: all
-  four groups (37 numeric, 6 categorical).
+- **First-time-lifter specialist.** Trained on all training rows. Inputs: same-meet inputs, any-event deadlift history,
+  and previous-attempt features. That is 24 numeric inputs and 20 missing-value indicators, plus 6 one-hot
+  categoricals: **332 input features**.
+- **Returning-lifter specialist.** Trained only on training rows that have an earlier full-power meet. Inputs: all four
+  groups, 37 numeric inputs and 15 indicators plus the same 6 categoricals: **283 input features**.
 
 **Routing.** At prediction time a result goes to the returning-lifter specialist if the lifter has a strictly earlier
 full-power meet, and to the first-time specialist otherwise. That information is known before the meet.
 
+**Architecture.** Each specialist has the same structure:
+
+1. A linear layer maps the input features to width *d* = 256.
+2. Three residual blocks follow. Each computes *x* + Dropout(Linear₂(Dropout(ReLU(Linear₁(BatchNorm(*x*)))))), where
+   Linear₁ expands 256 → 512 and Linear₂ projects back to 256. Hidden dropout is 0.1; residual dropout is 0.
+3. The output head is BatchNorm → ReLU → Linear(256 → 1), giving one value: the predicted deadlift.
+
+The specialists have 876,289 and 863,745 parameters; the difference comes only from the input layer.
+
 **Training.**
 
-- **Loss:** Huber, which matches the MAE objective more closely than squared error and limits the pull of extreme or
-  mis-entered rows.
-- **Early stopping:** on validation MAE, with patience 100.
-- **Tuning:** a bounded random search, 16 trials per specialist, over the number of leaves, minimum leaf size,
-  learning rate, feature and row subsampling, L2 regularization, and the Huber δ. Trials were trained on a fixed 30%
-  sample of training lifters, scored on full validation, and the winner was refit on all training data.
+- **Target:** standardized with the training mean and standard deviation; predictions are converted back to kg.
+- **Loss:** L1 (absolute error), matching the MAE metric.
+- **Optimizer:** Adam, learning rate 10⁻³, batch size 4,096.
+- **Stopping:** up to 40 epochs, with early stopping on validation MAE (patience 5). The weights from the best epoch
+  are restored.
+- **Seeds:** each specialist is trained with three seeds (42, 43, 44), and the three predictions are averaged. Seed
+  averaging reduces the run-to-run variation seen in single networks.
 
-**Table III — Tuned LightGBM settings**
+The ResNet settings are the fixed defaults above and were **not tuned**. Section VI compares it with tuned tree models.
 
-| Setting | First-time specialist | Returning specialist |
+**Table III — ResNet MLP specialists**
+
+| | First-time specialist | Returning specialist |
 |---|---|---|
-| Leaves | 511 | 255 |
-| Minimum rows per leaf | 100 | 50 |
-| Learning rate | 0.03 | 0.05 |
-| Features per tree | 60% | 60% |
-| Rows per tree | 90% | 100% |
-| Huber δ | 20 kg | 10 kg |
-| Trees (early-stopped) | 1,184 | 1,859 |
+| Input features | 332 | 283 |
+| Parameters | 876,289 | 863,745 |
 | Training rows / lifters | 1,817,276 / 551,698 | 1,264,025 / 301,327 |
-| Fit time (8-core laptop CPU) | 4.5 min | 3.2 min |
-
-Each specialist fits in a few minutes on CPU and is deterministic given its seed.
+| Best epoch (seeds 42 / 43 / 44) | 26 / 17 / 5 | 15 / 16 / 15 |
+| Fit time per seed (8-core laptop CPU) | 5–15 min | 6–7 min |
 
 ### C. Compared models and the blend
 
-On the same inputs and rows, we compare the specialists against simple baselines and against tree and deep models.
+On the same inputs and rows, we compare the ResNet specialists against simple baselines, tree ensembles, and other
+neural networks. Every model is used with the same two-specialist routing.
 
 **Baselines.**
 
@@ -224,15 +236,31 @@ On the same inputs and rows, we compare the specialists against simple baselines
 - **Repeat last deadlift:** returning lifters only.
 - **Ridge regression:** on standardized numeric inputs and one-hot categories.
 
-**Other trees.** CatBoost [7], with native categorical handling and MAE loss.
+**Tree ensembles.**
 
-**Tabular neural networks.** All networks use L1 loss, a standardized target, the Adam optimizer, and validation early
-stopping.
+- **LightGBM [6]:** tuned, with Huber loss and early stopping on validation MAE.
+- **CatBoost [7]:** native categorical handling, MAE loss.
+
+LightGBM's settings come from a bounded random search: 16 trials per specialist, trained on a fixed 30% sample of
+training lifters, scored on full validation, with the winner refit on all training data. Table IV lists the result.
+
+**Table IV — Tuned LightGBM settings (tree baseline)**
+
+| Setting | First-time specialist | Returning specialist |
+|---|---|---|
+| Leaves | 511 | 255 |
+| Minimum rows per leaf | 100 | 50 |
+| Learning rate | 0.03 | 0.05 |
+| Features / rows per tree | 60% / 90% | 60% / 100% |
+| Huber δ | 20 kg | 10 kg |
+| Trees (early-stopped) | 1,184 | 1,859 |
+| Fit time | 4.5 min | 3.2 min |
+
+**Other neural networks.** All use L1 loss, a standardized target, Adam, and validation early stopping.
 
 - **Plain MLP:** [128, 64] hidden units.
-- **Embedding MLP [10]:** each numeric input gets learned periodic embeddings and each category a learned embedding;
+- **Embedding MLP [10]:** learned periodic embeddings for each numeric input and learned embeddings for each category;
   [256, 128] hidden units after tuning.
-- **Tabular ResNet [9]:** 3 residual blocks, width 256.
 
 **Sequence models (returning lifters only).** These read the lifter's past meets directly instead of the history
 summaries.
@@ -240,26 +268,25 @@ summaries.
 - **GRU [11]:** hidden size 128, reading the last 12 meets.
 - **Transformer encoder [12]:** 2 layers, 4 heads, reading the last 16 meets.
 
-**Seeds and blending.** Neural models and stochastic LightGBM settings were each trained with three seeds, and their
-predictions were averaged. Our best result blends these models with weights chosen on validation. The resulting shares
-are shown in Table IV.
+**Blend.** Our best overall result blends these models, with weights chosen on validation. Neural models and the
+stochastic LightGBM settings are first averaged over three seeds. The resulting shares are shown in Table V.
 
-**Table IV — Blend shares in the best system (chosen on validation)**
+**Table V — Blend shares in the best system (chosen on validation)**
 
 | Component | First-time lifters | Returning lifters |
 |---|---|---|
-| LightGBM | 19% | 9% |
-| Embedding MLP | 56% | 9% |
 | ResNet MLP | 25% | 38% |
+| Embedding MLP | 56% | 9% |
+| LightGBM | 19% | 9% |
 | GRU | — | 19% |
 | Transformer | — | 25% |
 
-CatBoost received zero weight. Individually, all of these models land within about 0.1 kg of the LightGBM specialists
-(Section VI).
+Neural networks carry 81% of the first-time blend and 91% of the returning-lifter blend. CatBoost received zero
+weight.
 
 ### D. Prediction ranges
 
-Each prediction comes with an 80% range: the prediction ± Q × spread.
+Each prediction from the best (blended) system comes with an 80% range: the prediction ± Q × spread.
 
 - **Spread:** half the gap between two quantile LightGBM models (10th and 90th percentile), built with each
   specialist's tuned settings and floored at 1 kg. Harder cases therefore get wider ranges.
@@ -270,6 +297,9 @@ Each prediction comes with an 80% range: the prediction ± Q × spread.
 ### E. Implementation
 
 - **Software:** Python with pandas/PyArrow, LightGBM 4.7, CatBoost 1.2, and PyTorch 2.15 (CPU), on an 8-core laptop.
+- **Our implementations:** all neural networks (MLP, embedding MLP, ResNet, GRU and Transformer models), their training
+  loops, the history features, routing, blending, and interval calibration. The networks use PyTorch's standard
+  layers; the tree models use the LightGBM and CatBoost libraries.
 - **Experiment records:** every experiment saves its configuration, dataset checksum, split ID, seed, package versions,
   fitted preprocessing, and per-row predictions.
 - **Tests:** a 61-test suite checks for leakage (for example, no same-day or future history), split separation, metric
@@ -282,9 +312,11 @@ Each prediction comes with an 80% range: the prediction ± Q × spread.
 
 - **Table I's first row:** "1,126,387 removed" is the non-SBD entries (4,054,260 − 2,927,873). The other rows come
   straight from the cleaning log.
-- **Table IV:** the shares are the product of the pairwise validation weights. If space is tight, it can become one
-  sentence: "neural networks carry most of the blend weight."
-- **Diagram:** a small one would help in Method — inputs → *has an earlier meet?* → first-time or returning
+- **Table V:** the blend shares are the product of the pairwise validation weights. If space is tight, it can become
+  one sentence: "neural networks carry most of the blend weight."
+- **Table III's ResNet numbers:** parameter counts are exact (input layer + 3 blocks + head). Best epochs and fit
+  times come from the saved run metadata.
+- **Diagram:** a small one would help in Method — inputs → *has an earlier meet?* → first-time or returning ResNet
   specialist → prediction ± range.
 - **What to keep out of Method:** the experiments that didn't change the final model, such as loss variants, the
   capacity check, and seed-averaging details. They belong in Experiments, in one or two sentences each.

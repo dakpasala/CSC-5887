@@ -17,26 +17,32 @@ sex, and equipment. This setting uses no lifter history, so it applies equally t
 |---|---|---|---|
 | Squat ratio (r × squat, by sex) | 21.91 | 12.3% | 0.77 |
 | Ridge regression | 15.45 | 9.2% | 0.88 |
-| MLP (3 seeds) | 14.30 | 8.3% | 0.90 |
-| **LightGBM** | **14.08** | **8.3%** | **0.90** |
+| MLP (1 seed) | 14.30 | 8.3% | 0.90 |
+| **ResNet MLP (3 seeds), main model** | **14.28** | **8.3%** | **0.90** |
+| LightGBM (tree baseline) | 14.08 | 8.3% | 0.90 |
 
-**Accuracy.** LightGBM cuts the squat-ratio rule's error by about a third, a reduction of 7.8 kg. It beats ridge
-regression by 1.37 kg [1.31, 1.41], so the relationships between the lifts are clearly nonlinear. The MLP trails
-LightGBM by 0.22 kg [0.20, 0.24], and that gap is the same across all three seeds. Weighting each lifter equally gives
-a near-identical MAE (14.03 kg), so prolific competitors are not driving the result.
+**Accuracy.** The ResNet cuts the squat-ratio rule's error by about a third, a reduction of 7.6 kg [7.5, 7.8]. It beats
+ridge regression by 1.17 kg [1.11, 1.22], so the relationships between the lifts are clearly nonlinear. Weighting each
+lifter equally gives a near-identical MAE (14.22 kg), so prolific competitors are not driving the result.
 
-**In practical terms.** LightGBM's median miss is 11 kg, and 76% of predictions fall within 20 kg of the recorded
+**In practical terms.** The ResNet's median miss is 11.2 kg, and 75% of predictions fall within 20 kg of the recorded
 deadlift, against a mean deadlift of 185 kg.
+
+**Trees win on same-meet inputs alone.** With only these six inputs, LightGBM beats the ResNet by 0.20 kg
+[0.18, 0.22]. The ResNet only slightly beats the plain MLP, by 0.02 kg [0.01, 0.03]. The three ResNet seeds agree
+closely (14.31–14.34 kg), so this gap is not noise. It matches prior findings that tree ensembles are hard to beat on
+small sets of tabular features [8]. The ordering reverses once lifter history is added (Section VI-D): the network's
+advantage comes from combining many history features, not from the basic inputs.
 
 **Where the errors are.** Absolute error grows with lift size:
 
-- 10.4 kg for women vs 15.7 kg for men;
-- 10.2 kg for lifters under 60 kg bodyweight vs 19.1 kg at 120 kg and above;
-- 19.5 kg when bodyweight is missing.
+- 10.4 kg for women vs 16.0 kg for men;
+- 10.3 kg for lifters under 60 kg bodyweight vs 19.4 kg at 120 kg and above;
+- 19.2 kg when bodyweight is missing.
 
-Relative error stays at 8–9% across these groups. Residuals show the usual regression toward the mean: the strongest
-deadlifts are under-predicted and the weakest over-predicted. This reflects predicting a conditional average. It is
-not evidence about any individual lifter.
+Relative error stays at 8–9% (8.8% for women, 8.1% for men). Residuals show the usual regression toward the mean:
+the strongest deadlifts are under-predicted and the weakest over-predicted. This reflects predicting a conditional
+average. It is not evidence about any individual lifter.
 
 ### B. Which inputs help? (RQ2)
 
@@ -68,30 +74,41 @@ These are predictive contributions, not causal or biological effects.
 
 ### C. Does lifter history help? (RQ3)
 
-Most results (69.5%) come from lifters who competed before. For these returning lifters we add history features
-built from strictly earlier meets and compare on the same 268,289 results from 64,764 lifters.
+Most results (69.5%) come from lifters who competed before. For these returning lifters we add history features,
+built from strictly earlier meets, to the ResNet one group at a time. Every stage is evaluated on the same 268,289
+results from 64,764 lifters, with three seeds averaged per stage.
 
-| Model (returning lifters) | MAE |
-|---|---|
-| Repeat last deadlift | 13.44 |
-| LightGBM, no history | 14.20 |
-| + previous meet | 8.73 |
-| + career summaries | 8.41 |
-| + any-event history, previous attempts, and tuning (returning specialist) | 8.15 |
-| Best blend | **8.02** |
+| Model (returning lifters) | MAE | Change |
+|---|---|---|
+| Repeat last deadlift | 13.44 | — |
+| ResNet, no history | 14.41 | — |
+| + previous meet | 8.62 | −5.79 [−5.87, −5.69] |
+| + career summaries | 8.22 | −0.40 [−0.42, −0.39] |
+| + any-event history and previous attempts (returning specialist) | **8.07** | −0.15 [−0.16, −0.14] |
+| Best blend | 8.02 | |
 
-**History is by far the largest gain.** The previous meet alone cuts error by 5.5 kg [5.4, 5.6], more than all the
-same-meet input groups combined. Career summaries add another 0.32 kg [0.30, 0.34], and the remaining history
-features plus tuning add about 0.26 kg. The same pattern holds on later meets (protocol B): 14.10 → 8.47 → 8.17 kg.
+**History is by far the largest gain.** The previous meet alone cuts the ResNet's error by 5.8 kg, more than all the
+same-meet input groups combined. Career summaries add another 0.40 kg, and deadlift history from other event types
+plus previous attempts add 0.15 kg. In total, history lowers the ResNet's error for returning lifters by
+6.3 kg [6.2, 6.4].
 
-**The model adds more than repeating history.** Simply repeating the lifter's last deadlift gives 13.44 kg, which is
-already better than the no-history model. The best system beats that baseline by 5.4 kg. The model combines the
-lifter's past performance with how they are lifting at this meet, rather than assuming they repeat themselves.
+**The network gets more out of history than the trees.** At each step the ResNet gains more than LightGBM does with
+the same inputs:
 
-**First-time lifters.** They have no full-power history and improve less, from 13.80 to 12.98 kg, mainly through the
-extra context inputs. The exception is the 3.7% of first-time lifters who have an earlier deadlift-only or
-bench-and-deadlift meet. Using that history cuts their error from 15.36 to 10.39 kg. Their earlier meets are not
-full power, which is why the original history features missed them.
+- previous meet: −5.79 vs −5.48 kg;
+- career summaries: −0.40 vs −0.32 kg.
+
+Without history the ResNet trails LightGBM (Section VI-A). With full history it is ahead (8.07 vs 8.13 kg, Section
+VI-D). This matches the idea that the network's strength is combining many related numeric features.
+
+**The model adds more than repeating history.** Simply repeating the lifter's last deadlift gives 13.44 kg, already
+better than the no-history model. The final ResNet beats that baseline by 5.4 kg [5.3, 5.5]. It combines the lifter's
+past performance with how they are lifting at this meet, rather than assuming they repeat themselves.
+
+**First-time lifters.** They have no full-power history and improve less: from 13.99 kg (same-meet inputs) to 13.04 kg
+for the ResNet first-time specialist, which adds the extra context inputs. The exception is the 4,400 first-time
+lifters (3.7%) with an earlier deadlift-only or bench-and-deadlift meet. Using that history cuts their error from
+15.51 to 10.31 kg. Their earlier meets are not full power, which is why the original history features missed them.
 
 ### D. Model comparison
 
@@ -114,7 +131,7 @@ LightGBM (+0.03 kg [+0.02, +0.05]) and the embedding MLP (+0.04 kg). Its advanta
 returning lifters are 69% of results. The gaps are small: all families land within 0.07 kg of each other. Prior work finds that tree ensembles usually match or beat deep
 networks on tabular data [8], so matching them is the realistic bar for a network here. Our ResNet does slightly
 better. The validation-weighted blend adds 0.05 kg over the ResNet, and neural networks carry most of its weight
-(Table IV). CatBoost received zero blend weight because its errors are already covered by the other models.
+(Table V). CatBoost received zero blend weight because its errors are already covered by the other models.
 
 **The specialist split matters more than the model.** A single model for all lifters loses about 0.5 kg against the
 two specialists. For example, LightGBM gets 10.11 kg for everyone versus 9.64 kg split. That is about ten times the
@@ -213,7 +230,7 @@ returning lifter's recorded deadlift falls within about ±12 kg of the predictio
 - **Figures:** the best two would be the ablation chart (Section B) and an MAE-progression bar chart
   (14.1 → 9.6 → 9.5). The ablation chart is in `reports/full/figures/`. The progression chart doesn't exist yet;
   ask and I'll generate it.
-- **Section C's "+ any-event history, previous attempts, and tuning" row** combines several later follow-ups. If a
-  reviewer asks for the split: the new inputs, Huber loss, and tuning each add about 0.05–0.1 kg.
+- **Section C's LightGBM comparison numbers** (−5.48 and −0.32 kg) are the same-row LightGBM history steps from
+  the earlier LightGBM-based experiments (`reports/REPORT.md`, RQ3 and its career-history follow-up).
 - **Section D's 8.21 kg** is the untuned LightGBM, used so the GRU comparison is like-for-like (both untuned). The
   tuned LightGBM returning-lifter number is 8.15 kg.
