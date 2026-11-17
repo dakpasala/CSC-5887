@@ -56,6 +56,8 @@ def main(argv: list[str] | None = None) -> None:
         hh = df.set_index("row_id")["has_history"]
         build_objective_ensembles(cfg, hh)
         build_final_protocols(cfg, hh, splits["transfer_groups"])
+        from .ensemble import build_resnet_main
+        build_resnet_main(cfg, hh, splits["transfer_groups"])
     elif args.cmd == "hpo":
         from .hpo import run_search
         run_search(cfg, only=args.only)
@@ -95,6 +97,8 @@ def smoke(config: str | Path | None = None) -> dict:
     hh = df.set_index("row_id")["has_history"]
     ens += build_objective_ensembles(cfg, hh)
     ens += build_final_protocols(cfg, hh, splits["transfer_groups"])
+    from .ensemble import build_resnet_main
+    ens += build_resnet_main(cfg, hh, splits["transfer_groups"])
     for final in (False, True):
         evaluate(cfg, final=final)
         summarize_results(cfg, final=final)

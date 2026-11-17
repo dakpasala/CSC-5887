@@ -380,3 +380,61 @@ def build_final_protocols(cfg: dict, has_history: pd.Series, transfer_groups: li
         if meta is not None:
             metas.append(meta)
     return metas
+
+
+# ---------------------------------------------------------------------------- ResNet main model
+
+RESNET_SEEDS = [42, 43, 44]
+RESNET_A_SETS = {  # name -> (feature set, history_only)
+    "A_squat": ("A_squat", False), "B_squat_bench": ("B_squat_bench", False),
+    "C_plus_demographics": ("C_plus_demographics", False), "D_plus_equipment": ("D_plus_equipment", False),
+    "X_context": ("X_context", False), "X_all": ("X_all", False),
+    "D_plus_equipment+history": ("D_plus_equipment+history", True),
+    "D_plus_equipment+history_rich": ("D_plus_equipment+history_rich", True),
+}
+
+
+def resnetavg_id(proto: str, name: str) -> str:
+    return f"resnetavg__{proto}__{name.replace('+', '-')}" + ("__histrows" if "history" in name or name == "ret" else "")
+
+
+def average_runs(cfg: dict, name: str, ids: list[str]) -> dict | None:
+    """Mean prediction over seed runs; only built when every seed has finished."""
+    root = artifacts_dir(cfg) / "runs"
+    if not all((root / r / "done.json").exists() for r in ids):
+        return None
+    frames = [pd.read_parquet(root / r / "predictions.parquet").set_index(["row_id", "partition"]) for r in ids]
+    out = frames[0].copy()
+    out["yhat"] = np.mean([f.loc[out.index, "yhat"].to_numpy() for f in frames], axis=0)
+    return _write_pseudo_run(cfg, name, out.reset_index(), read_json(root / ids[0] / "meta.json"),
+                             {"averaged_runs": ids, "n_seeds": len(ids)}, ids, "seedavg")
+
+
+def build_resnet_main(cfg: dict, has_history: pd.Series, transfer_groups: list[dict]) -> list[dict]:
+    """Seed averages and routed systems for the ResNet main model on protocols A, B, C."""
+    from .train import RunSpec
+
+    metas = []
+    for name, (fs, hist) in RESNET_A_SETS.items():
+        ids = [RunSpec("resnet_main", "A", fs, "resnet_mlp", seed=s, history_only=hist).run_id for s in RESNET_SEEDS]
+        if (m := average_runs(cfg, resnetavg_id("A", name), ids)) is not None:
+            metas.append(m)
+    for key, fs, hist in [("all", "X_all+anyhist+dlatt", False), ("ret", "X_all+history_rich+anyhist+dlatt", True)]:
+        ids = [RunSpec("final_B", "B", fs, "resnet_mlp", seed=s, history_only=hist).run_id for s in RESNET_SEEDS]
+        if (m := average_runs(cfg, resnetavg_id("B", key), ids)) is not None:
+            metas.append(m)
+    pairs = {
+        "routed__A__resnet_main": (seedavg_id("resnet_all"), seedavg_id("resnet_ret")),
+        "routed__A__resnet_s42": ("resnet__A__X_all-anyhist-dlatt__resnet_mlp__s42",
+                                  "resnet__A__X_all-history_rich-anyhist-dlatt__resnet_mlp__histrows__s42"),
+        "routed__B__resnet_main": (resnetavg_id("B", "all"), resnetavg_id("B", "ret")),
+    }
+    for g in transfer_groups:
+        proto = f"C:{g['field']}={g['value']}"
+        pairs[f"routed__C-{g['field']}-{g['value']}__resnet"] = (
+            RunSpec("resnet_C", proto, "X_all+anyhist+dlatt", "resnet_mlp", seed=42).run_id,
+            RunSpec("resnet_C", proto, "X_all+history_rich+anyhist+dlatt", "resnet_mlp", seed=42, history_only=True).run_id)
+    for name, (f, h) in pairs.items():
+        if (m := route(cfg, name, f, h, has_history)) is not None:
+            metas.append(m)
+    return metas

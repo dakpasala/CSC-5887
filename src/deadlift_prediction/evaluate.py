@@ -107,6 +107,29 @@ def rid(exp, proto, fs, model, seed=None, hist=False, variant=None):
     return RunSpec(exp, proto, fs, model, seed=seed or 42, history_only=hist, variant=variant).run_id
 
 
+def transfer_costs(E, out_dir) -> None:
+    """Cost of never seeing a group: on its protocol-A test rows, the held-out model's
+    error minus the same model family trained with the group (identical rows)."""
+    rows = []
+    pairs = {"resnet": ("routed__A__resnet_s42", "routed__C-{f}-{v}__resnet"),
+             "lightgbm_vs_best": ("routed__A__final3_specialists", "routed__C-{f}-{v}__final_lgbm")}
+    for g in E.splits["transfer_groups"]:
+        for family, (seen_id, held_tpl) in pairs.items():
+            held_id = held_tpl.format(f=g["field"], v=g["value"])
+            if seen_id not in E.runs or held_id not in E.runs:
+                continue
+            held = E.pred(held_id)
+            held = held[held["partition"] == "test_transfer"].set_index("row_id")
+            seen = E.pred(seen_id)
+            seen = seen[seen["partition"] == "test"].set_index("row_id").loc[held.index]
+            es, eh = (seen["y"] - seen["yhat"]).abs(), (held["y"] - held["yhat"]).abs()
+            lo, hi = bootstrap_mean_ci((eh - es).to_numpy(), held["lifter_key"].to_numpy(), E.ev["bootstrap_reps"], E.cfg["seed"])
+            rows.append({"group": f"{g['field']}={g['value']}", "family": family, "rows": len(held),
+                         "lifters": int(held["lifter_key"].nunique()), "mae_seen": float(es.mean()), "mae_held_out": float(eh.mean()),
+                         "cost": float((eh - es).mean()), "ci_low": lo, "ci_high": hi})
+    pd.DataFrame(rows).to_csv(out_dir / "transfer_costs.csv", index=False)
+
+
 def evaluate(cfg: dict, final: bool = False) -> dict:
     E = Evaluator(cfg, final)
     s0 = cfg["models"]["mlp"]["seeds"][0]
@@ -382,6 +405,29 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
         for part in (["test_transfer", "test_in_dist"] if final else ["val"]):
             add(E.compare(f"finalC|{g['field']}={g['value']}", [old_with, old_without, new], part,
                           pairs=[(new, old_with), (new, old_without)]))
+
+    # 19. ResNet MLP as the main model (3-seed averages; transfer uses seed 42 on both sides)
+    from .ensemble import resnetavg_id
+    rav = lambda n: resnetavg_id("A", n)
+    lgbm_d, ridge_d = rid("ablation", "A", "D_plus_equipment", "lightgbm"), rid("ablation", "A", "D_plus_equipment", "linear")
+    mlp_d = rid("ablation", "A", "D_plus_equipment", "mlp", s0)
+    add(E.compare("resnet|accuracy", [ratio, ridge_d, mlp_d, lgbm_d, rav("D_plus_equipment")], T,
+                  pairs=[(rav("D_plus_equipment"), lgbm_d), (rav("D_plus_equipment"), ridge_d), (rav("D_plus_equipment"), mlp_d)]))
+    steps = ["A_squat", "B_squat_bench", "C_plus_demographics", "D_plus_equipment", "X_context", "X_all"]
+    add(E.compare("resnet|ablation", [rav(x) for x in steps], T,
+                  pairs=[(rav(b), rav(a)) for a, b in zip(steps, steps[1:])]))
+    hsteps = [rav("D_plus_equipment"), rav("D_plus_equipment+history"), rav("D_plus_equipment+history_rich"), seedavg_id("resnet_ret")]
+    add(E.compare("resnet|history", [last_a, *hsteps, "ensemble__A__final3_ret__histrows"], T, row_filter=has_h,
+                  pairs=[(b, a) for a, b in zip(hsteps, hsteps[1:])] + [(hsteps[-1], last_a)]))
+    add(E.compare("resnet|first_timers", [rav("D_plus_equipment"), "routed__A__resnet_main", "routed__A__final3_specialists"], T,
+                  row_filter=no_h, pairs=[("routed__A__resnet_main", rav("D_plus_equipment"))]))
+    add(E.compare("resnet|first_timers_other_event", [rav("D_plus_equipment"), "routed__A__resnet_main"], T, row_filter=other,
+                  pairs=[("routed__A__resnet_main", rav("D_plus_equipment"))]))
+    rbs = ["routed__B__original_specialists", "routed__B__expanded_specialists", "routed__B__resnet_main", "routed__B__final_recipe"]
+    for nm, filt in [("all", None), ("first_timers", no_h), ("returning", has_h)]:
+        add(E.compare(f"resnet|B|{nm}", rbs, TB, row_filter=filt, pairs=[(rbs[2], rbs[1]), (rbs[2], rbs[0])]))
+    if final:
+        transfer_costs(E, out_tables := E.root / "tables_final")
 
     # 8. follow-up: prediction ranges (conformal correction estimated on validation only)
     from .intervals import evaluate_final_intervals, evaluate_intervals
