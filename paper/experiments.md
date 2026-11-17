@@ -95,24 +95,30 @@ full power, which is why the original history features missed them.
 
 ### D. Model comparison
 
-We compare model families on the same inputs and rows. Each model is used as two specialists, one for first-time
-lifters and one for returning lifters. Neural networks are averaged over three seeds.
+We compare our main model, the ResNet MLP, against gradient-boosted trees and other neural networks on the same
+inputs and rows. Each model is used as two specialists, one for first-time lifters and one for returning lifters.
+Neural networks and LightGBM are averaged over three seeds; CatBoost uses one.
 
 | Model | All lifters | First-time | Returning |
 |---|---|---|---|
-| CatBoost | 9.66 | 13.07 | 8.16 |
-| **LightGBM (main model)** | **9.64** | 13.02 | 8.15 |
+| CatBoost (trees) | 9.66 | 13.07 | 8.16 |
+| LightGBM (trees, 3 seeds) | 9.62 | 13.01 | 8.13 |
 | Embedding MLP (3 seeds) | 9.62 | 13.00 | 8.12 |
-| ResNet MLP (3 seeds) | 9.59 | 13.04 | 8.07 |
+| **ResNet MLP (3 seeds), main model** | **9.59** | 13.04 | **8.07** |
 | Blend of the above + sequence models | **9.54** | **12.98** | **8.02** |
 
-**Model family barely matters.** All four families land within 0.07 kg of each other overall, and the
-validation-weighted blend adds just 0.10 kg over LightGBM. Neural networks carry most of the blend weight (Table IV),
-but they don't win individually. CatBoost received zero blend weight: its errors are already covered by the other
-models.
+**Our network edges out strong tree baselines.** The ResNet is the best single model family overall and for returning
+lifters. Paired against LightGBM it is −0.035 kg [−0.043, −0.026] overall and −0.064 kg [−0.074, −0.053] for
+returning lifters. Against CatBoost the gaps are −0.07 and −0.09 kg. For first-time lifters it is slightly worse than
+LightGBM (+0.03 kg [+0.02, +0.05]) and the embedding MLP (+0.04 kg). Its advantage comes from using history, and
+returning lifters are 69% of results. The gaps are small: all families land within 0.07 kg of each other. Prior work finds that tree ensembles usually match or beat deep
+networks on tabular data [8], so matching them is the realistic bar for a network here. Our ResNet does slightly
+better. The validation-weighted blend adds 0.05 kg over the ResNet, and neural networks carry most of its weight
+(Table IV). CatBoost received zero blend weight because its errors are already covered by the other models.
 
-**The specialist split matters more than the model.** A single LightGBM for all lifters gets 10.11 kg. Splitting it
-into first-time and returning specialists gets 9.64 kg, a 0.5 kg gain, about five times what blending adds.
+**The specialist split matters more than the model.** A single model for all lifters loses about 0.5 kg against the
+two specialists. For example, LightGBM gets 10.11 kg for everyone versus 9.64 kg split. That is about ten times the
+ResNet's edge over the trees.
 
 **Tuning, losses, and seeds.** Each of these gives small but consistent gains:
 
@@ -132,17 +138,22 @@ variation, rather than limited model capacity.
 
 ### E. Generalization to later meets and unseen groups (RQ4)
 
-**Later meets (protocol B).** We retrained the full recipe on the date split (training before 2023, testing on
-402,128 results from November 2024 onward) and compare it with earlier specialist sets on the same rows.
+**Later meets (protocol B).** We retrained the main model and the full recipe on the date split (training before
+2023, testing on 402,128 results from November 2024 onward). They are compared with earlier LightGBM specialist sets
+on the same rows.
 
-| Specialist set | All | First-time | Returning |
+| System | All | First-time | Returning |
 |---|---|---|---|
-| Original (same-meet + previous meet) | 9.59 | 13.85 | 8.17 |
-| + expanded inputs | 9.35 | 13.05 | 8.11 |
-| Final recipe | **9.11** | **13.00** | **7.81** |
+| LightGBM, original inputs (same-meet + previous meet) | 9.59 | 13.85 | 8.17 |
+| LightGBM, expanded inputs | 9.35 | 13.05 | 8.11 |
+| **ResNet MLP, final inputs (main model)** ‡ | **9.25** | 13.09 | **7.96** |
+| Blend, final recipe | **9.11** | **13.00** | **7.81** |
 
-Accuracy holds up about two years past the training period. Absolute error is somewhat lower than on protocol A,
-partly because recent meets have more Raw lifting and more lifters with history.
+‡ **TEMP: seed 42 only. Update to the 3-seed average when the runs finish.**
+
+The main model holds up about two years past the training period. It beats the expanded-input trees by 0.10 kg,
+mostly through returning lifters (−0.15 kg). Absolute error is somewhat lower than on protocol A, partly because recent
+meets have more Raw lifting and more lifters with history.
 
 This table also checks our own process. The later follow-ups (career and attempt history, tuning, new architectures,
 blending) were chosen while looking at protocol-A results, so their protocol-A gains could be slightly optimistic.

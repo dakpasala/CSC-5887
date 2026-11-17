@@ -25,7 +25,7 @@ from .splits import assert_disjoint, transfer_split
 
 @dataclass
 class RunSpec:
-    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf | catboost | final_B | final_C
+    experiment: str          # ablation | history | chrono | transfer | capacity | history_rich | quantile | expanded | objective | dl_arch | dlatt | seq | tuned | resnet | seqtf | catboost | final_B | final_C | resnet_main | resnet_C
     protocol: str            # A | B | C:<field>=<value>
     feature_set: str
     model: str
@@ -200,7 +200,22 @@ def plan(cfg: dict, splits_info: dict) -> list[RunSpec]:
                 ov.update({"objective": "quantile", "alpha": q})
                 runs.append(RunSpec("quantile", "A", fs, kind, history_only=hist, variant=f"final_q{round(q * 100):02d}", overrides=ov))
 
-    # 17. Capacity check: larger MLP / LightGBM variants, judged on validation only.
+    # 17. Deep-learning main model (ResNet MLP): the runs needed so every experiment reports it.
+    #     Order = priority: RQ1 + history chain + later-meet seeds, then the ablation, then transfer (1 seed).
+    rs = [seeds[0], *extra]
+    runs += [RunSpec("resnet_main", "A", "D_plus_equipment", "resnet_mlp", seed=sd) for sd in rs]
+    for fs in ["D_plus_equipment+history", "D_plus_equipment+history_rich"]:
+        runs += [RunSpec("resnet_main", "A", fs, "resnet_mlp", seed=sd, history_only=True) for sd in rs]
+    for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+        runs += [RunSpec("final_B", "B", fs, "resnet_mlp", seed=sd, history_only=hist) for sd in extra]
+    for fs in ["A_squat", "B_squat_bench", "C_plus_demographics", "X_context", "X_all"]:
+        runs += [RunSpec("resnet_main", "A", fs, "resnet_mlp", seed=sd) for sd in rs]
+    for g in splits_info["transfer_groups"]:
+        proto = f"C:{g['field']}={g['value']}"
+        for fs, hist in [("X_all+anyhist+dlatt", False), ("X_all+history_rich+anyhist+dlatt", True)]:
+            runs.append(RunSpec("resnet_C", proto, fs, "resnet_mlp", seed=seeds[0], history_only=hist))
+
+    # 18. Capacity check: larger MLP / LightGBM variants, judged on validation only.
     for name, v in cfg.get("capacity", {}).get("variants", {}).items():
         for fs, hist in [("D_plus_equipment", False), ("D_plus_equipment+history", True)]:
             runs.append(RunSpec("capacity", "A", fs, v["model"], seed=seeds[0], history_only=hist,
