@@ -46,29 +46,35 @@ average. It is not evidence about any individual lifter.
 
 ### B. Which inputs help? (RQ2)
 
-To measure each input group's contribution, we add groups one at a time and evaluate every stage on the same rows.
-This keeps missing data from changing who is being evaluated.
+To measure each input group's contribution, we add groups to the ResNet one at a time. Every stage is evaluated on the
+same 386,613 rows, so missing data never changes who is being evaluated. Each stage averages three seeds, and the
+seeds agree within 0.06 kg at every stage. LightGBM is shown for comparison.
 
-| Inputs | Ridge | MLP | LightGBM | LightGBM change |
+| Inputs | ResNet (3 seeds) | Change | LightGBM | ResNet − LightGBM |
 |---|---|---|---|---|
-| Squat | 19.48 | 18.51 | 16.99 | — |
-| + bench | 18.19 | 16.98 | 15.73 | −1.26 [−1.30, −1.21] |
-| + bodyweight, age, sex | 16.79 | 15.30 | 14.66 | −1.07 [−1.13, −1.02] |
-| + equipment | 15.45 | 14.30 | 14.08 | −0.58 [−0.62, −0.55] |
-| + federation, age class, country, tested status, year | — | — | 13.71 | −0.37 [−0.40, −0.35] |
-| + squat/bench attempt summaries | — | — | 13.68 | −0.03 |
+| Squat | 18.49 | — | 16.99 | +1.50 |
+| + bench | 16.98 | −1.51 [−1.57, −1.46] | 15.73 | +1.25 |
+| + bodyweight, age, sex | 15.26 | −1.72 [−1.78, −1.65] | 14.66 | +0.60 |
+| + equipment | 14.28 | −0.98 [−1.02, −0.94] | 14.08 | +0.20 |
+| + federation, age class, country, tested status, year | 13.69 | −0.59 [−0.62, −0.56] | 13.71 | −0.03 |
+| + squat/bench attempt summaries | **13.65** | −0.03 [−0.04, −0.02] | 13.68 | **−0.02** |
 
-**Every group helps, with shrinking returns.** All three models show the same pattern, and every step's confidence
-interval excludes zero.
+**Every group helps, with shrinking returns.** Every step's confidence interval excludes zero.
 
-- **Squat:** LightGBM using squat alone already beats the fixed ratio rule by 5 kg. The squat–deadlift relationship
-  depends on how strong the lifter is, not on a single multiplier.
-- **Bench:** the bench is nearly as informative as the demographic group. It likely carries information about
+- **Squat alone:** the ResNet already beats the fixed squat-ratio rule by 3.4 kg (18.49 vs 21.91). The
+  squat–deadlift relationship depends on how strong the lifter is, not on a single multiplier.
+- **Bench and demographics:** the two largest gains (−1.51 and −1.72 kg). The bench likely carries information about
   overall strength and body type that the squat alone misses.
-- **Context:** the extra context group adds 0.37 kg. Most of it comes from federation, which is worth 0.25 kg
-  [0.23, 0.27] on its own, and from filling missing ages from age classes (missing age falls from 42.6% to 30.1%).
+- **Equipment and context:** about 1 kg and 0.6 kg. The context gain comes mostly from federation and from filling
+  missing ages from age classes (missing age falls from 42.6% to 30.1%).
 - **Attempts:** squat and bench attempt details add almost nothing, partly because only 46% of results report
   attempts.
+
+**The network needs more inputs than the trees.** With squat alone, the ResNet is 1.5 kg behind LightGBM. The gap
+shrinks with every group added: 1.25, 0.60, then 0.20 kg. Once context is added, the ResNet pulls ahead, by
+0.026 kg [0.014, 0.040] and then 0.024 kg [0.009, 0.039]. With very few features, trees fit the step-like
+relationships more efficiently. As features accumulate, the network combines them at least as well. The same pattern
+continues with lifter history (Section VI-C), where the ResNet's lead grows.
 
 These are predictive contributions, not causal or biological effects.
 
@@ -231,7 +237,7 @@ returning lifter's recorded deadlift falls within about ±12 kg of the predictio
 
 ## Notes for the team
 
-- **If space runs out:** first cut the Ridge/MLP columns from Section B's table, then fold the protocol-B table
+- **If space runs out:** first cut the LightGBM columns from Section B's table (keep one sentence on the crossover), then fold the protocol-B table
   into one sentence, then shorten Section F to its first paragraph.
 - **Figures:** the best two would be the ablation chart (Section B) and an MAE-progression bar chart
   (14.1 → 9.6 → 9.5). The ablation chart is in `reports/full/figures/`. The progression chart doesn't exist yet;
