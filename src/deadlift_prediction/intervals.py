@@ -100,7 +100,8 @@ def final_quantile_runs(cfg: dict) -> dict:
     return out
 
 
-def evaluate_final_intervals(cfg: dict, final: bool, ctx: pd.DataFrame) -> pd.DataFrame | None:
+def evaluate_final_intervals(cfg: dict, final: bool, ctx: pd.DataFrame, system: str | None = None,
+                             tag: str = "") -> pd.DataFrame | None:
     """Ranges centred on the final system's own prediction: point +/- Q * spread.
 
     spread = half the gap between the 10th- and 90th-percentile LightGBM quantile
@@ -111,6 +112,7 @@ def evaluate_final_intervals(cfg: dict, final: bool, ctx: pd.DataFrame) -> pd.Da
     lies inside its own range."""
     from .ensemble import FINAL_SYSTEM
 
+    FINAL_SYSTEM = system or FINAL_SYSTEM  # point predictions to centre on (default: best blend)
     root = artifacts_dir(cfg) / "runs"
     runs = final_quantile_runs(cfg)
     needed = [FINAL_SYSTEM, *runs["first"], *runs["returning"]]
@@ -143,7 +145,8 @@ def evaluate_final_intervals(cfg: dict, final: bool, ctx: pd.DataFrame) -> pd.Da
                              **_summ(sub["y"], lo.loc[sub.index], hi.loc[sub.index], sub["lifter_key"])})
     out = pd.DataFrame(rows)
     tdir = artifacts_dir(cfg) / ("tables_final" if final else "tables_val")
-    out.to_csv(tdir / "intervals_final.csv", index=False)
-    write_json(tdir / "intervals_final.json", {"system": FINAL_SYSTEM, "scale_Q": q, "calibration_rows": int(len(v)),
+    suffix = f"_{tag}" if tag else ""
+    out.to_csv(tdir / f"intervals_final{suffix}.csv", index=False)
+    write_json(tdir / f"intervals_final{suffix}.json", {"system": FINAL_SYSTEM, "scale_Q": q, "calibration_rows": int(len(v)),
                                                "quantile_runs": runs, "spread_floor_kg": 1.0})
     return out

@@ -428,6 +428,8 @@ def build_resnet_main(cfg: dict, has_history: pd.Series, transfer_groups: list[d
         "routed__A__resnet_s42": ("resnet__A__X_all-anyhist-dlatt__resnet_mlp__s42",
                                   "resnet__A__X_all-history_rich-anyhist-dlatt__resnet_mlp__histrows__s42"),
         "routed__B__resnet_main": (resnetavg_id("B", "all"), resnetavg_id("B", "ret")),
+        "routed__A__lgbm_tuned": ("tuned__A__X_all-anyhist-dlatt__lightgbm__hpo",
+                                  "tuned__A__X_all-history_rich-anyhist-dlatt__lightgbm__histrows__hpo"),
     }
     for g in transfer_groups:
         proto = f"C:{g['field']}={g['value']}"

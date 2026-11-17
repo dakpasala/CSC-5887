@@ -28,7 +28,8 @@ def test_synthetic_pipeline_end_to_end():
     assert "routed__B__final_recipe" in names
     assert {"routed__A__resnet_main", "routed__B__resnet_main", "resnetavg__A__D_plus_equipment"} <= names
     tc = pd.read_csv(root / "tables_final" / "transfer_costs.csv")
-    assert set(tc["family"]) == {"resnet", "lightgbm_vs_best"} and tc["rows"].gt(0).all()
+    assert set(tc["family"]) == {"resnet", "lightgbm", "lightgbm_vs_best"} and tc["rows"].gt(0).all()
+    assert (root / "tables_final" / "intervals_final_resnet.csv").exists()
     assert any(n.startswith("routed__C-") for n in names)
     fi = pd.read_csv(root / "tables_final" / "intervals_final.csv", keep_default_na=False)
     assert {"val", "test"} <= set(fi["partition"]) and fi["coverage"].between(0, 1).all()

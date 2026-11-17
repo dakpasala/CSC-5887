@@ -56,7 +56,7 @@ seeds agree within 0.06 kg at every stage. LightGBM is shown for comparison.
 | + bench | 16.98 | −1.51 [−1.57, −1.46] | 15.73 | +1.25 |
 | + bodyweight, age, sex | 15.26 | −1.72 [−1.78, −1.65] | 14.66 | +0.60 |
 | + equipment | 14.28 | −0.98 [−1.02, −0.94] | 14.08 | +0.20 |
-| + federation, age class, country, tested status, year | 13.69 | −0.59 [−0.62, −0.56] | 13.71 | −0.03 |
+| + federation, age class, country, tested status, year | 13.68 | −0.59 [−0.62, −0.56] | 13.71 | −0.03 |
 | + squat/bench attempt summaries | **13.65** | −0.03 [−0.04, −0.02] | 13.68 | **−0.02** |
 
 **Every group helps, with shrinking returns.** Every step's confidence interval excludes zero.
@@ -169,7 +169,7 @@ on the same rows.
 |---|---|---|---|
 | LightGBM, original inputs (same-meet + previous meet) | 9.59 | 13.85 | 8.17 |
 | LightGBM, expanded inputs | 9.35 | 13.05 | 8.11 |
-| **ResNet MLP, final inputs (main model, 3 seeds)** | **9.10** | **13.01** | **7.79** |
+| **ResNet MLP, final inputs (main model, 3 seeds)** | **9.09** | **13.01** | **7.79** |
 | Blend, final recipe (1 seed per component) | 9.11 | 13.00 | 7.81 |
 
 **The main model holds up about two years past the training period.** It beats the expanded-input trees by
@@ -184,28 +184,45 @@ optimistic. Protocol B was never used for any choice. Measured against the expan
 improves by 0.26 kg on protocol B versus 0.12 kg on protocol A. The improvements carry over to data never used for
 any decision.
 
-**Unseen federations and equipment (protocol C).** For each held-out group, we compare LightGBM specialists trained
-without the group against the best system trained with it, on the same test rows. The difference is the cost of
-never seeing that group.
+**Unseen federations and equipment (protocol C).** For each held-out group, we compare the ResNet specialists trained
+**without** the group against the same ResNet (same seed) trained **with** it, on identical test rows. The difference
+is the cost of never seeing that group. LightGBM's cost, measured the same way (held-out LightGBM vs LightGBM trained with the group), is shown for comparison.
 
-| Held out | Results | Seen in training | Held out | Extra error |
-|---|---|---|---|---|
-| USAPL | 43,006 | 10.06 | 10.21 | +0.15 |
-| Unlimited equipment | 40,208 | 7.26 | 7.50 | +0.23 |
-| Single-ply | 147,373 | 9.33 | 9.79 | +0.46 |
-| Multi-ply | 7,369 | 13.79 | 14.52 | +0.74 |
-| THSWPA (HS girls) | 42,326 | 5.87 | 6.71 | +0.84 |
-| Wraps | 31,414 | 11.11 | 12.50 | +1.39 |
-| THSPA (HS boys) | 69,477 | 8.69 | 10.37 | +1.68 |
+| Held out | Results | ResNet, seen | ResNet, held out | **ResNet cost** | LightGBM cost |
+|---|---|---|---|---|---|
+| USAPL | 43,006 | 10.15 | 10.47 | +0.32 [+0.29, +0.36] | +0.06 |
+| THSWPA (HS girls) | 42,326 | 5.95 | 6.65 | +0.70 [+0.66, +0.74] | +0.81 |
+| THSPA (HS boys) | 69,477 | 8.77 | 9.98 | +1.20 [+1.16, +1.26] | +1.59 |
+| Wraps | 31,414 | 11.25 | 13.26 | +2.01 [+1.94, +2.10] | +1.27 |
+| Unlimited equipment | 40,208 | 7.35 | 10.06 | +2.70 [+2.59, +2.81] | +0.14 |
+| Single-ply | 147,373 | 9.45 | 13.03 | +3.58 [+3.52, +3.63] | +0.37 |
+| Multi-ply | 7,369 | 14.01 | 18.51 | +4.51 [+4.16, +4.86] | +0.51 |
 
-**Transfer cost depends on how unusual the group is.** Groups that resemble the training data cost less than 0.5 kg.
-The Texas high-school federations (young lifters, with ages mostly unreported) and Wraps meets cost the most. Part of
-each cost is a model difference, LightGBM alone versus the full blend, worth about 0.1 kg.
+**Unseen federations transfer well.** Costs are 0.3–1.2 kg, comparable to LightGBM's 0.1–1.6 kg; the ResNet does better on
+THSPA and THSWPA and slightly worse on USAPL. The Texas high-school federations cost the most, consistent with their distinct populations of young lifters
+whose ages are mostly unreported.
 
-**History makes transfer far more robust.** Earlier models without history lost 2–9 kg on the same groups. Linear
-models that saw an equipment category they had never trained on failed badly, with 63–117 kg MAE. With the final
-inputs, no held-out group is more than 1.7 kg worse than when it was seen in training. These gaps reflect population
-differences, not causal effects of equipment or federation.
+**Unseen equipment is the network's weak point.** The ResNet loses 2.0–4.5 kg on a held-out equipment category, while
+LightGBM loses only 0.1–1.3 kg. The likely cause is how unknown categories are encoded:
+
+- **Federation:** rare federations (fewer than 500 training rows) map to the shared *unknown* code, so the network
+  sees many unknown-federation examples in training and learns a sensible default.
+- **Equipment:** every category is common, so the *unknown-equipment* input is **never active in training**. When a
+  held-out category appears, the network receives an input pattern it has never seen and extrapolates poorly.
+- **Trees:** they degrade more gracefully, because a never-seen code is simply routed down one branch of each split.
+
+The same mechanism made earlier linear models fail badly on unseen equipment (63–117 kg MAE). The ResNet is far more
+robust than that, but less robust than trees.
+
+**Practical implication.** When a deployment may meet equipment categories absent from training, use the tree model,
+or drop the equipment input (for LightGBM, earlier sensitivity runs showed dropping it reduces unseen-equipment
+error in three of four groups). A cheap
+mitigation for the network would be randomly masking categories to *unknown* during training, so the unknown code is
+learned. We did not test this.
+
+**Overall.** History makes transfer much more robust for both model families: earlier no-history models lost 2–9 kg
+on these groups. These gaps reflect population differences and encoding limits, not causal effects of equipment or
+federation.
 
 ### F. Prediction ranges
 

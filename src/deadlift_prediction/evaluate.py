@@ -112,6 +112,7 @@ def transfer_costs(E, out_dir) -> None:
     error minus the same model family trained with the group (identical rows)."""
     rows = []
     pairs = {"resnet": ("routed__A__resnet_s42", "routed__C-{f}-{v}__resnet"),
+             "lightgbm": ("routed__A__lgbm_tuned", "routed__C-{f}-{v}__final_lgbm"),
              "lightgbm_vs_best": ("routed__A__final3_specialists", "routed__C-{f}-{v}__final_lgbm")}
     for g in E.splits["transfer_groups"]:
         for family, (seen_id, held_tpl) in pairs.items():
@@ -433,6 +434,7 @@ def evaluate(cfg: dict, final: bool = False) -> dict:
     from .intervals import evaluate_final_intervals, evaluate_intervals
     evaluate_intervals(cfg, final, E.ctx)
     evaluate_final_intervals(cfg, final, E.ctx)
+    evaluate_final_intervals(cfg, final, E.ctx, system="routed__A__resnet_main", tag="resnet")
 
     # subgroup breakdowns for the primary-protocol D models
     subs = E.subgroups(dmods[:4], T)
